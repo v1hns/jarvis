@@ -11,22 +11,47 @@
   <key>CFBundleShortVersionString</key>
   <string>0.1.0</string>
 
-  <!-- Camera permission required by Meta DAT -->
+  <!-- URL scheme so Meta AI app can deep-link back after permission grant -->
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>jarvis</string>
+      </array>
+    </dict>
+  </array>
+
+  <!-- Required by ExternalAccessory framework used internally by Meta DAT -->
+  <key>UISupportedExternalAccessoryProtocols</key>
+  <array>
+    <string>com.meta.ar.wearable</string>
+  </array>
+
+  <!-- Background streaming -->
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>bluetooth-peripheral</string>
+    <string>external-accessory</string>
+    <string>audio</string>
+  </array>
+
   <key>NSCameraUsageDescription</key>
   <string>Jarvis needs camera access to stream video from your Ray-Ban glasses.</string>
 
-  <!-- Microphone permission required by Meta DAT -->
   <key>NSMicrophoneUsageDescription</key>
   <string>Jarvis needs microphone access to capture audio from your Ray-Ban glasses.</string>
 
-  <!-- Bluetooth required to communicate with glasses -->
   <key>NSBluetoothAlwaysUsageDescription</key>
   <string>Jarvis uses Bluetooth to connect to your Meta Ray-Ban glasses.</string>
   <key>NSBluetoothPeripheralUsageDescription</key>
   <string>Jarvis uses Bluetooth to connect to your Meta Ray-Ban glasses.</string>
 
+  <!-- Meta Wearables DAT — values injected from Secrets.xcconfig -->
   <key>MWDAT</key>
   <dict>
+    <key>AppLinkURLScheme</key>
+    <string>jarvis://</string>
     <key>MetaAppID</key>
     <string>$(META_APP_ID)</string>
     <key>ClientToken</key>

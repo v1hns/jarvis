@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -9,73 +9,100 @@ import {
   View,
 } from 'react-native';
 import { useJarvis, Message } from '../hooks/useJarvis';
-import { MetaDAT } from '../modules/MetaDAT';
 
 export function HomeScreen() {
   const {
-    sessionState,
-    devices,
-    messages,
-    isThinking,
-    modelsReady,
-    transcript,
-    scanDevices,
-    connectDevice,
-    enableVision,
-    snapAndAsk,
-    disconnect,
+    sessionState, isStreaming, isConnecting,
+    devices, messages, isThinking, modelsReady,
+    permStatus, transcript, lastRoute,
+    register, grantPermission, connect, connectSpecific,
+    snapAndAsk, disconnect,
   } = useJarvis();
-
-  useEffect(() => {
-    MetaDAT.register('com.jarvis.app');
-    MetaDAT.requestPermissions();
-  }, []);
 
   const renderMessage = useCallback(({ item }: { item: Message }) => (
     <View style={[styles.bubble, item.role === 'assistant' ? styles.assistantBubble : styles.userBubble]}>
-      {item.imageBase64 && (
-        <Text style={styles.imageTag}>[photo attached]</Text>
+      {item.imageBase64 && <Text style={styles.tag}>[photo]</Text>}
+      {item.source && item.source !== 'local' && (
+        <Text style={styles.tag}>[{item.source}]</Text>
       )}
       <Text style={styles.bubbleText}>{item.content}</Text>
     </View>
   ), []);
 
-  const isConnected = sessionState === 'connected' || sessionState === 'streaming';
-
   return (
     <SafeAreaView style={styles.container}>
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>JARVIS</Text>
-        <View style={[styles.statusDot, { backgroundColor: isConnected ? '#00ff88' : '#ff4444' }]} />
-        <Text style={styles.statusText}>{sessionState}</Text>
+        <View style={[styles.dot, {
+          backgroundColor: isStreaming ? '#00ff88' : isConnecting ? '#ffaa00' : '#333'
+        }]} />
+        <Text style={styles.status}>{sessionState}</Text>
+        {lastRoute && <Text style={styles.route}> · {lastRoute}</Text>}
       </View>
 
-      {/* Model loading */}
+      {/* Loading models */}
       {!modelsReady && (
-        <View style={styles.loading}>
+        <View style={styles.center}>
           <ActivityIndicator color="#00ff88" />
-          <Text style={styles.loadingText}>Loading on-device AI models…</Text>
+          <Text style={styles.hint}>Loading on-device AI…</Text>
         </View>
       )}
 
-      {/* Device list when idle */}
-      {sessionState === 'idle' && modelsReady && (
+      {/* Step 1 — Register */}
+      {modelsReady && sessionState === 'stopped' && permStatus === 'unknown' && (
         <View style={styles.section}>
-          <Pressable style={styles.btn} onPress={scanDevices}>
-            <Text style={styles.btnText}>Scan for Ray-Ban Glasses</Text>
+          <Text style={styles.sectionTitle}>Connect to Ray-Ban Glasses</Text>
+          <Text style={styles.hint}>Pairs Jarvis with the Meta AI app on this phone.</Text>
+          <Pressable style={styles.btn} onPress={register}>
+            <Text style={styles.btnText}>Register with Meta AI App</Text>
           </Pressable>
-          {devices.map(d => (
-            <Pressable key={d.id} style={styles.deviceItem} onPress={() => connectDevice(d.id)}>
-              <Text style={styles.deviceName}>{d.name}</Text>
-              <Text style={styles.deviceModel}>{d.model} · {d.firmwareVersion}</Text>
-            </Pressable>
-          ))}
+        </View>
+      )}
+
+      {/* Step 2 — Grant camera permission */}
+      {modelsReady && permStatus === 'denied' && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Camera Permission Required</Text>
+          <Text style={styles.hint}>You'll be taken to the Meta AI app to approve camera access.</Text>
+          <Pressable style={styles.btn} onPress={grantPermission}>
+            <Text style={styles.btnText}>Grant Camera Access</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Step 3 — Connect */}
+      {modelsReady && permStatus === 'granted' && sessionState === 'stopped' && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Ready</Text>
+          <Pressable style={styles.btn} onPress={connect}>
+            <Text style={styles.btnText}>Connect to Glasses</Text>
+          </Pressable>
+          {devices.length > 0 && (
+            <>
+              <Text style={[styles.hint, { marginTop: 16 }]}>Or pick a device:</Text>
+              {devices.map(d => (
+                <Pressable key={d.id} style={styles.deviceItem} onPress={() => connectSpecific(d.id)}>
+                  <Text style={styles.deviceName}>{d.name}</Text>
+                  <Text style={styles.deviceMeta}>{d.model}</Text>
+                </Pressable>
+              ))}
+            </>
+          )}
+        </View>
+      )}
+
+      {/* Connecting */}
+      {isConnecting && (
+        <View style={styles.center}>
+          <ActivityIndicator color="#ffaa00" />
+          <Text style={styles.hint}>Waiting for glasses…</Text>
         </View>
       )}
 
       {/* Active session */}
-      {isConnected && (
+      {isStreaming && (
         <>
           <FlatList
             style={styles.chat}
@@ -84,22 +111,14 @@ export function HomeScreen() {
             renderItem={renderMessage}
             contentContainerStyle={{ paddingBottom: 16 }}
           />
-
-          {transcript !== '' && (
-            <Text style={styles.transcript}>Heard: {transcript}</Text>
-          )}
-
+          {transcript !== '' && <Text style={styles.transcript}>Heard: {transcript}</Text>}
           {isThinking && (
             <View style={styles.thinking}>
               <ActivityIndicator size="small" color="#00ff88" />
-              <Text style={styles.thinkingText}>Jarvis is thinking…</Text>
+              <Text style={styles.hint}>Thinking…</Text>
             </View>
           )}
-
           <View style={styles.toolbar}>
-            <Pressable style={styles.btn} onPress={enableVision}>
-              <Text style={styles.btnText}>Enable Vision</Text>
-            </Pressable>
             <Pressable style={styles.btn} onPress={() => snapAndAsk()}>
               <Text style={styles.btnText}>Snap + Ask</Text>
             </Pressable>
@@ -109,69 +128,35 @@ export function HomeScreen() {
           </View>
         </>
       )}
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0a' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a1a1a',
-  },
-  title: { color: '#00ff88', fontSize: 22, fontWeight: '700', letterSpacing: 4, marginRight: 12 },
-  statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  statusText: { color: '#888', fontSize: 12, textTransform: 'uppercase' },
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { color: '#555', fontSize: 14 },
-  section: { padding: 20, gap: 12 },
-  deviceItem: {
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#00ff8844',
-    borderRadius: 8,
-    backgroundColor: '#111',
-  },
-  deviceName: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  deviceModel: { color: '#555', fontSize: 12, marginTop: 2 },
-  chat: { flex: 1, padding: 16 },
-  bubble: {
-    maxWidth: '80%',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-  },
-  userBubble: { alignSelf: 'flex-end', backgroundColor: '#1a3a2a' },
+  container:    { flex: 1, backgroundColor: '#0a0a0a' },
+  header:       { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#1a1a1a' },
+  title:        { color: '#00ff88', fontSize: 22, fontWeight: '700', letterSpacing: 4, marginRight: 12 },
+  dot:          { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
+  status:       { color: '#555', fontSize: 12, textTransform: 'uppercase' },
+  route:        { color: '#333', fontSize: 11 },
+  center:       { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  section:      { padding: 24, gap: 12 },
+  sectionTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },
+  hint:         { color: '#555', fontSize: 13, lineHeight: 18 },
+  deviceItem:   { padding: 14, borderWidth: 1, borderColor: '#00ff8822', borderRadius: 8, backgroundColor: '#111' },
+  deviceName:   { color: '#fff', fontSize: 15, fontWeight: '600' },
+  deviceMeta:   { color: '#444', fontSize: 12, marginTop: 2 },
+  chat:         { flex: 1, padding: 16 },
+  bubble:       { maxWidth: '80%', borderRadius: 12, padding: 12, marginBottom: 8 },
+  userBubble:      { alignSelf: 'flex-end', backgroundColor: '#1a3a2a' },
   assistantBubble: { alignSelf: 'flex-start', backgroundColor: '#1a1a1a' },
-  bubbleText: { color: '#e0e0e0', fontSize: 15, lineHeight: 21 },
-  imageTag: { color: '#00ff88', fontSize: 11, marginBottom: 4 },
-  transcript: { color: '#444', fontSize: 12, paddingHorizontal: 16, paddingBottom: 4 },
-  thinking: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    gap: 8,
-  },
-  thinkingText: { color: '#555', fontSize: 13 },
-  toolbar: {
-    flexDirection: 'row',
-    padding: 12,
-    gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#1a1a1a',
-  },
-  btn: {
-    flex: 1,
-    backgroundColor: '#00ff8822',
-    borderWidth: 1,
-    borderColor: '#00ff8866',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  btnDanger: { backgroundColor: '#ff444422', borderColor: '#ff444466' },
-  btnText: { color: '#00ff88', fontSize: 13, fontWeight: '600' },
+  bubbleText:   { color: '#e0e0e0', fontSize: 15, lineHeight: 21 },
+  tag:          { color: '#00ff88', fontSize: 10, marginBottom: 3 },
+  transcript:   { color: '#2a2a2a', fontSize: 12, paddingHorizontal: 16, paddingBottom: 4 },
+  thinking:     { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 8 },
+  toolbar:      { flexDirection: 'row', padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: '#1a1a1a' },
+  btn:          { flex: 1, backgroundColor: '#00ff8811', borderWidth: 1, borderColor: '#00ff8833', borderRadius: 8, padding: 14, alignItems: 'center' },
+  btnDanger:    { backgroundColor: '#ff444411', borderColor: '#ff444433' },
+  btnText:      { color: '#00ff88', fontSize: 13, fontWeight: '600' },
 });

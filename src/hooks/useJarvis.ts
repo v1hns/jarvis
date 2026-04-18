@@ -17,40 +17,37 @@ export interface Message {
 }
 
 export function useJarvis() {
-  const lm = useRef<CactusLM | null>(null);
+  const lm  = useRef<CactusLM | null>(null);
   const stt = useRef<CactusSTT | null>(null);
 
-  const [sessionState, setSessionState] = useState<SessionState>('idle');
-  const [devices, setDevices] = useState<DeviceInfo[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isThinking, setIsThinking] = useState(false);
-  const [modelsReady, setModelsReady] = useState(false);
-  const [transcript, setTranscript] = useState('');
-  const [lastRoute, setLastRoute] = useState<Route | null>(null);
+  const [sessionState, setSessionState] = useState<SessionState>('stopped');
+  const [devices, setDevices]           = useState<DeviceInfo[]>([]);
+  const [messages, setMessages]         = useState<Message[]>([]);
+  const [isThinking, setIsThinking]     = useState(false);
+  const [modelsReady, setModelsReady]   = useState(false);
+  const [transcript, setTranscript]     = useState('');
+  const [lastRoute, setLastRoute]       = useState<Route | null>(null);
+  const [permStatus, setPermStatus]     = useState<'unknown' | 'granted' | 'denied'>('unknown');
 
-  // Audio buffer collected from the glasses microphone
-  const audioBuffer = useRef<number[]>([]);
+  const audioBuffer  = useRef<number[]>([]);
   const silenceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ─── Boot AI models ──────────────────────────────────────────────────────
+  // ─── Boot SDK + AI models ─────────────────────────────────────────────────
 
   useEffect(() => {
-    async function loadModels() {
-      lm.current = new CactusLM({ options: { quantization: 'int4' } });
+    async function init() {
+      // Configure Meta DAT (reads MWDAT dict from Info.plist)
+      await MetaDAT.configure();
+      const perm = await MetaDAT.checkPermission();
+      setPermStatus(perm);
+
+      lm.current  = new CactusLM({ options: { quantization: 'int4' } });
       stt.current = new CactusSTT({ options: { quantization: 'int4' } });
-
-      await Promise.all([
-        lm.current.download(),
-        stt.current.download(),
-      ]);
-      await Promise.all([
-        lm.current.init(),
-        stt.current.init(),
-      ]);
-
+      await Promise.all([lm.current.download(), stt.current.download()]);
+      await Promise.all([lm.current.init(),     stt.current.init()]);
       setModelsReady(true);
     }
-    loadModels().catch(console.error);
+    init().catch(console.error);
   }, []);
 
   // ─── Meta DAT event subscriptions ───────────────────────────────────────
@@ -58,11 +55,10 @@ export function useJarvis() {
   useEffect(() => {
     const subs = [
       addDATListener('onSessionStateChange', setSessionState),
+      addDATListener('onDevicesChanged', setDevices),
 
       addDATListener('onAudioChunk', ({ samples }) => {
         audioBuffer.current.push(...samples);
-
-        // Simple VAD: after 1.5 s of received audio with no new chunks, transcribe
         if (silenceTimer.current) clearTimeout(silenceTimer.current);
         silenceTimer.current = setTimeout(() => {
           const audio = audioBuffer.current.splice(0);
@@ -81,10 +77,8 @@ export function useJarvis() {
 
   async function transcribeAndReply(audio: number[], imageBase64?: string) {
     if (!stt.current || !lm.current || !modelsReady) return;
-
     const { text } = await stt.current.transcribe({ audio });
     if (!text.trim()) return;
-
     setTranscript(text);
     await reply(text, imageBase64);
   }
@@ -127,14 +121,11 @@ export function useJarvis() {
           break;
 
         case 'vision_query':
-          // Cloud VLM isn't wired yet — fall back to on-device Gemma's own vision
-          // capability, per the PRD's degradation mode.
           responseText = await localComplete(true);
           source = 'vision';
           break;
 
         case 'desktop_action':
-          // Bridge isn't built yet — surface the gap instead of silently failing.
           responseText =
             "Your laptop isn't reachable from here yet — the desktop bridge hasn't been wired. " +
             "Want me to answer what I can locally?";
@@ -169,45 +160,50 @@ export function useJarvis() {
 
   // ─── Public controls ─────────────────────────────────────────────────────
 
-  async function scanDevices() {
-    const found = await MetaDAT.getAvailableDevices();
-    setDevices(found);
-    return found;
+  async function register() {
+    await MetaDAT.startRegistration();
   }
 
-  async function connectDevice(deviceId: string) {
-    await MetaDAT.connect(deviceId);
-    await MetaDAT.startStream({ audio: { enabled: true, sampleRate: 16000 } });
+  async function grantPermission() {
+    const status = await MetaDAT.requestPermission();
+    setPermStatus(status);
   }
 
-  async function enableVision() {
-    await MetaDAT.startStream({ video: { enabled: true, width: 1280, height: 720, fps: 10 } });
+  async function connect() {
+    await MetaDAT.startAutoSession();
+  }
+
+  async function connectSpecific(deviceId: string) {
+    await MetaDAT.startSession(deviceId);
   }
 
   async function snapAndAsk(question?: string) {
     const imageBase64 = await MetaDAT.capturePhoto();
-    await transcribeAndReply([], imageBase64);
     if (question) await reply(question, imageBase64);
+    else await transcribeAndReply([], imageBase64);
   }
 
   async function disconnect() {
-    await MetaDAT.disconnect();
-    setSessionState('disconnected');
+    await MetaDAT.stopSession();
     setMessages([]);
   }
 
   return {
     sessionState,
+    isStreaming:   sessionState === 'streaming',
+    isConnecting:  sessionState === 'waitingForDevice' || sessionState === 'starting',
     devices,
     messages,
     isThinking,
     modelsReady,
+    permStatus,
     transcript,
     lastRoute,
     cloudModel: cloudModelName(),
-    scanDevices,
-    connectDevice,
-    enableVision,
+    register,
+    grantPermission,
+    connect,
+    connectSpecific,
     snapAndAsk,
     disconnect,
   };

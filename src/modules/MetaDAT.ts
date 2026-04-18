@@ -5,25 +5,25 @@ const { MetaDATModule } = NativeModules;
 if (!MetaDATModule) {
   throw new Error(
     'MetaDATModule not found.\n' +
-    'Run: cd ios && pod install\n' +
-    'Then rebuild the app on a physical iPhone (Bluetooth required).'
+    'Run: cd ios && pod install, then rebuild on a physical iPhone.'
   );
 }
 
+// Mirrors StreamSessionState enum from MWDATCamera
 export type SessionState =
-  | 'idle'
-  | 'connecting'
-  | 'connected'
+  | 'stopped'
+  | 'stopping'
+  | 'waitingForDevice'
+  | 'starting'
   | 'streaming'
-  | 'paused'
-  | 'disconnected'
-  | 'error';
+  | 'paused';
+
+export type PermissionStatus = 'granted' | 'denied';
 
 export interface DeviceInfo {
   id: string;
   name: string;
-  firmwareVersion: string;
-  model: 'ray-ban-meta' | 'ray-ban-meta-display' | 'oakley-meta-hstn';
+  model: string;
 }
 
 export interface VideoFrame {
@@ -35,43 +35,54 @@ export interface VideoFrame {
 }
 
 export interface AudioChunk {
-  /** PCM float32 samples at 16 kHz mono */
+  /** PCM float32 samples at 16 kHz mono (via Bluetooth HFP) */
   samples: number[];
   timestampMs: number;
 }
 
-export interface StreamConfig {
-  video?: { enabled: boolean; width?: number; height?: number; fps?: number };
-  audio?: { enabled: boolean; sampleRate?: 16000 | 44100 };
-}
-
 export const MetaDAT = {
-  register(applicationId: string): Promise<void> {
-    return MetaDATModule.register(applicationId);
+  /** Call once at app launch — reads MWDAT dict from Info.plist */
+  configure(): Promise<void> {
+    return MetaDATModule.configure();
   },
-  requestPermissions(): Promise<{ camera: boolean; microphone: boolean }> {
-    return MetaDATModule.requestPermissions();
+
+  /** Opens Meta AI app pairing flow. User approves once ever. */
+  startRegistration(): Promise<string> {
+    return MetaDATModule.startRegistration();
   },
-  getAvailableDevices(): Promise<DeviceInfo[]> {
-    return MetaDATModule.getAvailableDevices();
+
+  /** Returns current camera permission without prompting */
+  checkPermission(): Promise<PermissionStatus> {
+    return MetaDATModule.checkPermission();
   },
-  connect(deviceId: string): Promise<void> {
-    return MetaDATModule.connect(deviceId);
+
+  /** Deep-links to Meta AI app for camera permission grant */
+  requestPermission(): Promise<PermissionStatus> {
+    return MetaDATModule.requestPermission();
   },
-  startStream(config: StreamConfig): Promise<void> {
-    return MetaDATModule.startStream(config);
+
+  /** SDK auto-selects paired glasses. Transitions through waitingForDevice → starting → streaming. */
+  startAutoSession(): Promise<void> {
+    return MetaDATModule.startAutoSession();
   },
-  pauseStream(): Promise<void> {
-    return MetaDATModule.pauseStream();
+
+  /** Connect to a specific device by id from onDevicesChanged event */
+  startSession(deviceId: string): Promise<void> {
+    return MetaDATModule.startSession(deviceId);
   },
-  resumeStream(): Promise<void> {
-    return MetaDATModule.resumeStream();
+
+  stopSession(): Promise<void> {
+    return MetaDATModule.stopSession();
   },
-  disconnect(): Promise<void> {
-    return MetaDATModule.disconnect();
-  },
+
+  /** Capture a still photo. Video pauses briefly then auto-resumes. Returns base64 JPEG. */
   capturePhoto(): Promise<string> {
     return MetaDATModule.capturePhoto();
+  },
+
+  /** Start capturing audio from glasses mic via Bluetooth HFP (AVAudioEngine) */
+  startAudio(): Promise<void> {
+    return MetaDATModule.startAudio();
   },
 };
 
@@ -81,6 +92,7 @@ const emitter = new NativeEventEmitter(MetaDATModule);
 
 export type DATEventMap = {
   onSessionStateChange: SessionState;
+  onDevicesChanged: DeviceInfo[];
   onVideoFrame: VideoFrame;
   onAudioChunk: AudioChunk;
   onError: { code: string; message: string };
