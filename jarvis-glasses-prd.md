@@ -62,7 +62,8 @@ The user experience is: I say "Hey Jarvis, what's on my desk?" and hear an answe
 
 - **Glasses:** Ray-Ban Meta 2023 Wayfarer. Integrated via the Meta Wearables Device Access Toolkit (iOS SDK, Swift 6). DAT provides camera frame capture and audio streaming. Glasses speakers are addressed as a standard iOS Bluetooth audio output — TTS output routes through normal iOS audio.
 - **Phone:** iPhone 15 or newer, iOS 17+. Native Swift app. No React Native, no Flutter. Rationale: Meta DAT is Swift-first, Cactus has a Swift binding with Apple NPU acceleration (shipped Jan 2026), and cross-platform has no demo-day benefit.
-- **On-device model:** Gemma 4 E4B (4.5B effective params, multimodal, 128K context) running via Cactus on the Apple Neural Engine. E4B chosen over E2B because E2B is too weak to be a reliable tool-calling planner.
+- **On-device model:** Gemma 4 E4B (4.5B effective params, multimodal, 128K context) running via Cactus on the Apple Neural Engine. E4B chosen over E2B because E2B is too weak to be a reliable tool-calling planner. E4B is the *default* planner/answerer; complex prompts escalate to cloud Gemma (see below).
+- **Cloud Gemma (escalation path):** Google AI Studio–hosted Gemma 4 (default: `gemma-4-27b-it`, swappable). Same model family as on-device so the prompt surface is identical — Cactus handles simple/fast turns; the cloud model handles long-context, multi-step reasoning, or anything the local router flags as high-complexity. API key stored in `.env` as `GEMMA_API_KEY`, read at app startup and never logged.
 - **Desktop agent:** Claude Code with computer use enabled, running on the user's laptop. This is the "Dispatch pattern" — not the Claude-branded Dispatch product, but the same architectural idea: phone sends natural-language tasks to a local Claude instance that owns the desktop.
 - **Cloud VLM:** Claude Sonnet 4.6 (or Gemini, as a swappable provider) called from the phone directly over HTTPS when the router decides a prompt needs vision.
 
@@ -81,12 +82,14 @@ The user experience is: I say "Hey Jarvis, what's on my desk?" and hear an answe
 
 ### Routing
 
-- **Router model:** Gemma 4 E4B with a fixed system prompt describing available capabilities and a JSON-output tool-call format.
+- **Router model:** Gemma 4 E4B (on-device) with a fixed system prompt describing available capabilities and a JSON-output tool-call format. Router always runs locally — we do not pay a round-trip to route.
 - **Routing strategy:** Capability-based. Gemma 4 classifies each prompt into one of:
-  - `local_answer` — general knowledge, chit-chat, simple reasoning the model can handle itself
+  - `local_answer` — general knowledge, chit-chat, simple reasoning the model can handle itself on-device
+  - `cloud_answer` — long-context, multi-step reasoning, code generation, or anything the router flags as beyond E4B's comfort zone; routed to cloud Gemma (`gemma-4-27b-it` via Google AI Studio)
   - `vision_query` — requires a camera frame; routed to cloud VLM
   - `desktop_action` — requires the laptop; routed to the desktop agent bridge
   - `clarify` — confidence is low, ask a one-question follow-up before proceeding
+- **Local vs. cloud escalation:** The router emits a `complexity` score alongside its route. `local_answer` with high complexity is rewritten as `cloud_answer` before dispatch. Cloud escalation is preferred over on-device for: prompts longer than ~1k tokens, prompts requiring multi-step planning, prompts asking for code. Everything else stays local for latency + privacy.
 - **Confidence threshold:** Gemma 4 emits a confidence score (via prompt structure or logprob heuristic). Below threshold → `clarify` path. This is the routing safety net.
 - **No rule-based override layer** in v1. Router is pure Gemma. Confidence threshold + clarify path is the only safety net. (Rule-based overrides are a v2 addition if Gemma's routing proves unreliable in practice.)
 
@@ -114,15 +117,16 @@ The system decomposes into these deep modules, each with a narrow tested interfa
 2. **WakeDetector** — consumes an audio stream, fires a callback on wake. Two implementations behind a common protocol: `GemmaAudioWakeDetector` (primary) and `PorcupineWakeDetector` (fallback). Swappable at runtime.
 3. **Transcriber** — consumes an audio buffer, returns text. Two implementations: `GemmaTranscriber` and `AppleTranscriber`. Same protocol.
 4. **Router** — takes `{prompt: String, hasRecentFrame: Bool}`, returns a `RouteDecision` enum (`.localAnswer | .visionQuery | .desktopAction | .clarify`) with optional structured parameters. Wraps Gemma 4 E4B inference via Cactus.
-5. **LocalAnswerer** — takes text prompt, returns text reply via Gemma 4 E4B.
-6. **VisionClient** — takes `{prompt: String, frame: Image}`, returns text reply. Wraps the cloud VLM API.
-7. **DesktopBridgeClient** — takes a structured task, returns a stream of progress events and a final result. Wraps the Tailscale-hosted relay.
-8. **Speaker** — takes text, plays it through glasses audio output. Two implementations: `ElevenLabsSpeaker` and `AppleSpeaker`. Same protocol.
-9. **Orchestrator** — the top-level coordinator. Subscribes to `WakeDetector`, runs the full turn: wake → transcribe → route → execute → speak. Owns the session state machine (idle / listening / thinking / executing / speaking).
+5. **LocalAnswerer** — takes text prompt, returns text reply via on-device Gemma 4 E4B (Cactus).
+6. **CloudGemmaClient** — takes text prompt (+ optional history), returns text reply via Google AI Studio Gemma API. Reads `GEMMA_API_KEY` from env. Model configurable (default `gemma-4-27b-it`).
+7. **VisionClient** — takes `{prompt: String, frame: Image}`, returns text reply. Wraps the cloud VLM API.
+8. **DesktopBridgeClient** — takes a structured task, returns a stream of progress events and a final result. Wraps the Tailscale-hosted relay.
+9. **Speaker** — takes text, plays it through glasses audio output. Two implementations: `ElevenLabsSpeaker` and `AppleSpeaker`. Same protocol.
+10. **Orchestrator** — the top-level coordinator. Subscribes to `WakeDetector`, runs the full turn: wake → transcribe → route → execute → speak. Owns the session state machine (idle / listening / thinking / executing / speaking).
 
 On the laptop:
 
-10. **DesktopRelay** — small Node or Swift-on-macOS process. Exposes an HTTP endpoint over Tailscale. Translates incoming tasks into Claude Code CLI invocations with computer use. Streams output back.
+11. **DesktopRelay** — small Node or Swift-on-macOS process. Exposes an HTTP endpoint over Tailscale. Translates incoming tasks into Claude Code CLI invocations with computer use. Streams output back.
 
 ### API contracts
 
