@@ -1,0 +1,22 @@
+require_relative '../node_modules/react-native/scripts/react_native_pods'
+
+platform :ios, '15.2'
+prepare_react_native_project!
+
+target 'Jarvis' do
+  config = use_native_modules!
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :hermes_enabled => true
+  )
+
+  # Meta Wearables Device Access Toolkit
+  # Installed via Swift Package Manager in Xcode:
+  #   File > Add Package Dependencies...
+  #   URL: https://github.com/facebook/meta-wearables-dat-ios
+  # SPM packages are not declared in Podfile — add in Xcode instead.
+
+  post_install do |installer|
+    react_native_post_install(installer, config[:reactNativePath])
+  end
+end
