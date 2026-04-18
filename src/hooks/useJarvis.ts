@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { CactusLM, CactusSTT } from 'cactus-react-native';
 import { MetaDAT, addDATListener, SessionState, DeviceInfo } from '../modules/MetaDAT';
+import { route as routePrompt, Route } from '../modules/Router';
+import { cloudComplete, cloudModelName } from '../modules/GemmaCloud';
 
 const SYSTEM_PROMPT = `You are Jarvis, a concise AI assistant running on Meta Ray-Ban smart glasses.
 Responses must be short (1-3 sentences) since they are spoken aloud.
@@ -11,6 +13,7 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   imageBase64?: string;
+  source?: 'local' | 'cloud' | 'vision';
 }
 
 export function useJarvis() {
@@ -23,6 +26,7 @@ export function useJarvis() {
   const [isThinking, setIsThinking] = useState(false);
   const [modelsReady, setModelsReady] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [lastRoute, setLastRoute] = useState<Route | null>(null);
 
   // Audio buffer collected from the glasses microphone
   const audioBuffer = useRef<number[]>([]);
@@ -89,25 +93,78 @@ export function useJarvis() {
     if (!lm.current) return;
 
     const userMsg: Message = { role: 'user', content: userText, imageBase64 };
-    setMessages(prev => [...prev, userMsg]);
+    const nextMessages = [...messages, userMsg];
+    setMessages(nextMessages);
     setIsThinking(true);
 
-    const history = [...messages, userMsg].map(m => ({
-      role: m.role,
-      content: m.content,
-      ...(m.imageBase64 ? { images: [m.imageBase64] } : {}),
-    }));
+    const decision = await routePrompt(userText, Boolean(imageBase64), lm.current);
+    setLastRoute(decision.route);
+    console.log(`[Router] ${decision.route} (${decision.confidence.toFixed(2)}) — ${decision.reason}`);
 
-    const result = await lm.current.complete({
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        ...history,
-      ],
-    });
+    const localComplete = async (withImage: boolean): Promise<string> => {
+      const history = nextMessages.map(m => ({
+        role: m.role,
+        content: m.content,
+        ...(m.imageBase64 && withImage ? { images: [m.imageBase64] } : {}),
+      }));
+      const result = await lm.current!.complete({
+        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...history],
+      });
+      return result.response;
+    };
 
-    const assistantMsg: Message = { role: 'assistant', content: result.response };
-    setMessages(prev => [...prev, assistantMsg]);
-    setIsThinking(false);
+    try {
+      let responseText: string;
+      let source: Message['source'] = 'local';
+
+      switch (decision.route) {
+        case 'cloud_answer':
+          responseText = await cloudComplete({
+            system: SYSTEM_PROMPT,
+            messages: nextMessages.map(m => ({ role: m.role, content: m.content })),
+          });
+          source = 'cloud';
+          break;
+
+        case 'vision_query':
+          // Cloud VLM isn't wired yet — fall back to on-device Gemma's own vision
+          // capability, per the PRD's degradation mode.
+          responseText = await localComplete(true);
+          source = 'vision';
+          break;
+
+        case 'desktop_action':
+          // Bridge isn't built yet — surface the gap instead of silently failing.
+          responseText =
+            "Your laptop isn't reachable from here yet — the desktop bridge hasn't been wired. " +
+            "Want me to answer what I can locally?";
+          source = 'local';
+          break;
+
+        case 'clarify':
+          responseText = `I'm not sure what you meant — ${decision.reason}. Could you rephrase?`;
+          source = 'local';
+          break;
+
+        case 'local_answer':
+        default:
+          responseText = await localComplete(false);
+          source = 'local';
+          break;
+      }
+
+      setMessages(prev => [...prev, { role: 'assistant', content: responseText, source }]);
+    } catch (err: unknown) {
+      const errText = err instanceof Error ? err.message : String(err);
+      console.error(`[${decision.route}]`, errText);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `(${decision.route} failed: ${errText})`,
+        source: decision.route === 'cloud_answer' ? 'cloud' : 'local',
+      }]);
+    } finally {
+      setIsThinking(false);
+    }
   }
 
   // ─── Public controls ─────────────────────────────────────────────────────
@@ -146,6 +203,8 @@ export function useJarvis() {
     isThinking,
     modelsReady,
     transcript,
+    lastRoute,
+    cloudModel: cloudModelName(),
     scanDevices,
     connectDevice,
     enableVision,
