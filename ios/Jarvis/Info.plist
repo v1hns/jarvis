@@ -25,14 +25,14 @@
   <key>NSBluetoothPeripheralUsageDescription</key>
   <string>Jarvis uses Bluetooth to connect to your Meta Ray-Ban glasses.</string>
 
-  <!-- Meta Wearables DAT analytics opt-out (optional) -->
   <key>MWDAT</key>
   <dict>
-    <key>Analytics</key>
-    <dict>
-      <key>OptOut</key>
-      <false/>
-    </dict>
+    <key>MetaAppID</key>
+    <string>1487636526490742</string>
+    <key>ClientToken</key>
+    <string>AR|1487636526490742|e44e5c5635fecc4410605f6209c6ec9a</string>
+    <key>TeamID</key>
+    <string>$(DEVELOPMENT_TEAM)</string>
   </dict>
 </dict>
 </plist>
