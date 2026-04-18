@@ -28,9 +28,9 @@
   <key>MWDAT</key>
   <dict>
     <key>MetaAppID</key>
-    <string>1487636526490742</string>
+    <string>$(META_APP_ID)</string>
     <key>ClientToken</key>
-    <string>AR|1487636526490742|e44e5c5635fecc4410605f6209c6ec9a</string>
+    <string>$(META_CLIENT_TOKEN)</string>
     <key>TeamID</key>
     <string>$(DEVELOPMENT_TEAM)</string>
   </dict>

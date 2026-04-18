@@ -3,6 +3,11 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val secrets = java.util.Properties().apply {
+    val f = rootProject.file("app/secrets.properties")
+    if (f.exists()) load(f.inputStream())
+}
+
 android {
     namespace = "com.jarvis"
     compileSdk = 35
@@ -12,6 +17,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        manifestPlaceholders["metaAppId"] = secrets.getProperty("META_APP_ID", "")
     }
     buildTypes {
         release {

@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# React Native build artifacts
+android/build/
+android/app/build/
+android/.gradle/
+ios/build/
+ios/Pods/
+ios/DerivedData/
+*.xcworkspace
+*.xcuserdata
+
+# iOS secrets — copy Secrets.xcconfig.example → Secrets.xcconfig and fill in values
+ios/Jarvis/Secrets.xcconfig
+
+# Android secrets — copy secrets.properties.example → secrets.properties and fill in values
+android/app/secrets.properties
+
+# Android local config (contains GITHUB_TOKEN)
+android/local.properties
+
+# Misc
+.env
+.DS_Store
+*.log

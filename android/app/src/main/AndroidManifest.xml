@@ -23,7 +23,7 @@
     <!-- Meta Wearables DAT: your application ID from the Developer Center -->
     <meta-data
         android:name="com.meta.wearable.mwdat.APPLICATION_ID"
-        android:value="1487636526490742" />
+        android:value="${metaAppId}" />
 
     <!-- Set to true to opt out of analytics -->
     <meta-data
