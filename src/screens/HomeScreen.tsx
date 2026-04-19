@@ -15,8 +15,9 @@ export function HomeScreen() {
     sessionState, isStreaming, isConnecting,
     devices, messages, isThinking, modelsReady,
     permStatus, transcript, lastRoute,
+    laptopOnline, desktopProgress, needsConfirm,
     register, grantPermission, connect, connectSpecific,
-    snapAndAsk, disconnect,
+    snapAndAsk, disconnect, confirmDesktopAction,
   } = useJarvis();
 
   const renderMessage = useCallback(({ item }: { item: Message }) => (
@@ -40,6 +41,9 @@ export function HomeScreen() {
         }]} />
         <Text style={styles.status}>{sessionState}</Text>
         {lastRoute && <Text style={styles.route}> · {lastRoute}</Text>}
+        {laptopOnline !== null && (
+          <View style={[styles.laptopDot, { backgroundColor: laptopOnline ? '#00ff88' : '#555' }]} />
+        )}
       </View>
 
       {/* Loading models */}
@@ -111,13 +115,42 @@ export function HomeScreen() {
             renderItem={renderMessage}
             contentContainerStyle={{ paddingBottom: 16 }}
           />
-          {transcript !== '' && <Text style={styles.transcript}>Heard: {transcript}</Text>}
-          {isThinking && (
+
+          {transcript !== '' && (
+            <Text style={styles.transcript}>Heard: {transcript}</Text>
+          )}
+
+          {/* Desktop progress banner */}
+          {desktopProgress !== '' && (
+            <View style={styles.progressBanner}>
+              <ActivityIndicator size="small" color="#00aaff" style={{ marginRight: 8 }} />
+              <Text style={styles.progressText}>{desktopProgress}</Text>
+            </View>
+          )}
+
+          {/* Desktop confirmation prompt */}
+          {needsConfirm && (
+            <View style={styles.confirmBanner}>
+              <Text style={styles.confirmTitle}>Confirm action</Text>
+              <Text style={styles.confirmText}>{needsConfirm}</Text>
+              <View style={styles.confirmRow}>
+                <Pressable style={[styles.btn, styles.confirmYes]} onPress={() => confirmDesktopAction(true)}>
+                  <Text style={styles.btnText}>Yes, do it</Text>
+                </Pressable>
+                <Pressable style={[styles.btn, styles.btnDanger]} onPress={() => confirmDesktopAction(false)}>
+                  <Text style={styles.btnText}>Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {isThinking && !desktopProgress && (
             <View style={styles.thinking}>
               <ActivityIndicator size="small" color="#00ff88" />
               <Text style={styles.hint}>Thinking…</Text>
             </View>
           )}
+
           <View style={styles.toolbar}>
             <Pressable style={styles.btn} onPress={() => snapAndAsk()}>
               <Text style={styles.btnText}>Snap + Ask</Text>
@@ -134,29 +167,37 @@ export function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container:    { flex: 1, backgroundColor: '#0a0a0a' },
-  header:       { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#1a1a1a' },
-  title:        { color: '#00ff88', fontSize: 22, fontWeight: '700', letterSpacing: 4, marginRight: 12 },
-  dot:          { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  status:       { color: '#555', fontSize: 12, textTransform: 'uppercase' },
-  route:        { color: '#333', fontSize: 11 },
-  center:       { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  section:      { padding: 24, gap: 12 },
-  sectionTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },
-  hint:         { color: '#555', fontSize: 13, lineHeight: 18 },
-  deviceItem:   { padding: 14, borderWidth: 1, borderColor: '#00ff8822', borderRadius: 8, backgroundColor: '#111' },
-  deviceName:   { color: '#fff', fontSize: 15, fontWeight: '600' },
-  deviceMeta:   { color: '#444', fontSize: 12, marginTop: 2 },
-  chat:         { flex: 1, padding: 16 },
-  bubble:       { maxWidth: '80%', borderRadius: 12, padding: 12, marginBottom: 8 },
-  userBubble:      { alignSelf: 'flex-end', backgroundColor: '#1a3a2a' },
-  assistantBubble: { alignSelf: 'flex-start', backgroundColor: '#1a1a1a' },
-  bubbleText:   { color: '#e0e0e0', fontSize: 15, lineHeight: 21 },
-  tag:          { color: '#00ff88', fontSize: 10, marginBottom: 3 },
-  transcript:   { color: '#2a2a2a', fontSize: 12, paddingHorizontal: 16, paddingBottom: 4 },
-  thinking:     { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 8 },
-  toolbar:      { flexDirection: 'row', padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: '#1a1a1a' },
-  btn:          { flex: 1, backgroundColor: '#00ff8811', borderWidth: 1, borderColor: '#00ff8833', borderRadius: 8, padding: 14, alignItems: 'center' },
-  btnDanger:    { backgroundColor: '#ff444411', borderColor: '#ff444433' },
-  btnText:      { color: '#00ff88', fontSize: 13, fontWeight: '600' },
+  container:      { flex: 1, backgroundColor: '#0a0a0a' },
+  header:         { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#1a1a1a' },
+  title:          { color: '#00ff88', fontSize: 22, fontWeight: '700', letterSpacing: 4, marginRight: 12 },
+  dot:            { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
+  laptopDot:      { width: 6, height: 6, borderRadius: 3, marginLeft: 8 },
+  status:         { color: '#555', fontSize: 12, textTransform: 'uppercase' },
+  route:          { color: '#333', fontSize: 11 },
+  center:         { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  section:        { padding: 24, gap: 12 },
+  sectionTitle:   { color: '#fff', fontSize: 18, fontWeight: '600' },
+  hint:           { color: '#555', fontSize: 13, lineHeight: 18 },
+  deviceItem:     { padding: 14, borderWidth: 1, borderColor: '#00ff8822', borderRadius: 8, backgroundColor: '#111' },
+  deviceName:     { color: '#fff', fontSize: 15, fontWeight: '600' },
+  deviceMeta:     { color: '#444', fontSize: 12, marginTop: 2 },
+  chat:           { flex: 1, padding: 16 },
+  bubble:         { maxWidth: '80%', borderRadius: 12, padding: 12, marginBottom: 8 },
+  userBubble:        { alignSelf: 'flex-end', backgroundColor: '#1a3a2a' },
+  assistantBubble:   { alignSelf: 'flex-start', backgroundColor: '#1a1a1a' },
+  bubbleText:     { color: '#e0e0e0', fontSize: 15, lineHeight: 21 },
+  tag:            { color: '#00ff88', fontSize: 10, marginBottom: 3 },
+  transcript:     { color: '#2a2a2a', fontSize: 12, paddingHorizontal: 16, paddingBottom: 4 },
+  thinking:       { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 8 },
+  toolbar:        { flexDirection: 'row', padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: '#1a1a1a' },
+  btn:            { flex: 1, backgroundColor: '#00ff8811', borderWidth: 1, borderColor: '#00ff8833', borderRadius: 8, padding: 14, alignItems: 'center' },
+  btnDanger:      { backgroundColor: '#ff444411', borderColor: '#ff444433' },
+  btnText:        { color: '#00ff88', fontSize: 13, fontWeight: '600' },
+  progressBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#001a2a', paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#00aaff22' },
+  progressText:   { color: '#00aaff', fontSize: 13, flex: 1 },
+  confirmBanner:  { backgroundColor: '#1a0a00', padding: 16, borderTopWidth: 1, borderTopColor: '#ff880033', gap: 8 },
+  confirmTitle:   { color: '#ffaa00', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  confirmText:    { color: '#e0e0e0', fontSize: 14, lineHeight: 20 },
+  confirmRow:     { flexDirection: 'row', gap: 8, marginTop: 4 },
+  confirmYes:     { backgroundColor: '#00442211', borderColor: '#00884433' },
 });
