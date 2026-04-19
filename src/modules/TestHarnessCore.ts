@@ -55,8 +55,10 @@ export function buildCase(
   response: string,
   imageBase64?: string,
 ): TestCase {
+  // Random suffix avoids collisions when two cases are built in the same ms.
+  const suffix = Math.random().toString(36).slice(2, 6);
   return {
-    id: `tc_${Date.now()}`,
+    id: `tc_${Date.now()}_${suffix}`,
     createdAt: new Date().toISOString(),
     label: transcript.slice(0, 80) || (imageBase64 ? '(photo query)' : '(no speech)'),
     audioSamples,

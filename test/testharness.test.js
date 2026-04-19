@@ -113,21 +113,28 @@ test('buildCase: empty transcript + no image → "(no speech)" label', () => {
   assert.equal(tc.label, '(no speech)');
 });
 
-test('buildCase: id is prefixed with tc_ and createdAt is ISO string', () => {
+test('buildCase: id is prefixed with tc_<ms>_<rand> and createdAt is ISO string', () => {
   const tc = buildCase([0.1], 'hi', 'local_answer', 'ok');
-  assert.match(tc.id, /^tc_\d+$/);
+  assert.match(tc.id, /^tc_\d+_[a-z0-9]{1,4}$/);
   assert.match(tc.createdAt, /^\d{4}-\d{2}-\d{2}T/);
+});
+
+test('buildCase: back-to-back calls in the same ms still yield distinct ids', () => {
+  const ids = new Set();
+  for (let i = 0; i < 200; i++) {
+    ids.add(buildCase([0.1], 'hi', 'local_answer', 'ok').id);
+  }
+  // With a 4-char base36 suffix, 200 draws should virtually never collide.
+  assert.equal(ids.size, 200);
 });
 
 // ── end-to-end pipeline ───────────────────────────────────────────────────────
 
-test('pipeline: build → insert → serialize → parse → remove', async () => {
+test('pipeline: build → insert → serialize → parse → remove', () => {
   let stored = '';
   const tc1 = buildCase([0.1], 'first', 'local_answer', 'ok');
   stored = serializeCases(insertCase(parseCases(stored), tc1));
 
-  // buildCase derives id from Date.now() — ensure distinct timestamps.
-  await new Promise(r => setTimeout(r, 2));
   const tc2 = buildCase([0.2], 'second', 'cloud_answer', 'okey');
   stored = serializeCases(insertCase(parseCases(stored), tc2));
   assert.notEqual(tc1.id, tc2.id);
