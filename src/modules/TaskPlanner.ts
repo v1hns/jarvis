@@ -37,12 +37,11 @@ export async function planTask(
   userText: string,
 ): Promise<TaskPlan | null> {
   try {
-    const { response } = await lm.complete({
-      messages: [
-        { role: 'system', content: PLANNER_SYSTEM_PROMPT },
-        { role: 'user', content: userText },
-      ],
-    });
+    const result = await lm.completion([
+      { role: 'system', content: PLANNER_SYSTEM_PROMPT },
+      { role: 'user', content: userText },
+    ]);
+    const response = result.content ?? result.text ?? '';
     const match = response.match(/\{[\s\S]*\}/);
     if (!match) return null;
     const parsed = JSON.parse(match[0]) as {

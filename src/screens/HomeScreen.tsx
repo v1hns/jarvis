@@ -1,13 +1,14 @@
 import React, { useCallback, useRef, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -76,7 +77,7 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
   // Setup state: not ready → welcome placeholder; ready → main
   if (!modelsReady) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={[styles.container, styles.screen]}>
         <View style={styles.bootWrap}>
           <Text style={styles.bootTitle}>JARVIS</Text>
           <ActivityIndicator color="#b8ff6b" />
@@ -86,7 +87,7 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
             that it runs fully offline.
           </Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -96,10 +97,10 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}
+      style={[styles.container, styles.screen]}
       keyboardVerticalOffset={0}
     >
-      <SafeAreaView style={styles.flex}>
+      <View style={styles.flex}>
         {/* ─── Top bar ─────────────────────────────────────────── */}
         <View style={styles.topBar}>
           <View style={styles.brand}>
@@ -341,10 +342,18 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
             </Pressable>
           )}
         </View>
-      </SafeAreaView>
+      </View>
     </KeyboardAvoidingView>
   );
 }
+
+const WINDOW = Dimensions.get('window');
+const TOP_INSET = Platform.select({
+  ios: 54,
+  android: StatusBar.currentHeight ?? 24,
+  default: 0,
+});
+const BOTTOM_INSET = Platform.select({ ios: 30, default: 8 });
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
@@ -423,6 +432,13 @@ const ACCENT_DIM = '#b8ff6b22';
 const styles = StyleSheet.create({
   flex:        { flex: 1 },
   container:   { flex: 1, backgroundColor: BG },
+  screen:      {
+    width: WINDOW.width,
+    minHeight: WINDOW.height,
+    paddingTop: TOP_INSET,
+    paddingBottom: BOTTOM_INSET,
+    backgroundColor: BG,
+  },
 
   // Boot
   bootWrap:    { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32 },

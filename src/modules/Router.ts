@@ -1,12 +1,13 @@
 /**
- * Minimal shape Router depends on. Matches `RouterLM.complete` from
+ * Minimal shape Router depends on. Matches `CactusLM.completion` from
  * cactus-react-native but declared locally so the module compiles against
  * plain Node (for tests) without the bundler-conditional RN package entry.
  */
 export interface RouterLM {
-  complete(args: {
-    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
-  }): Promise<{ response: string }>;
+  completion(
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    params?: Record<string, unknown>,
+  ): Promise<{ content: string; text?: string }>;
 }
 
 export type Route =
@@ -80,12 +81,11 @@ export async function modelRoute(
   prompt: string,
 ): Promise<RouteDecision | null> {
   try {
-    const { response } = await lm.complete({
-      messages: [
-        { role: 'system', content: ROUTER_SYSTEM_PROMPT },
-        { role: 'user', content: prompt },
-      ],
-    });
+    const result = await lm.completion([
+      { role: 'system', content: ROUTER_SYSTEM_PROMPT },
+      { role: 'user', content: prompt },
+    ]);
+    const response = result.content ?? result.text ?? '';
     const match = response.match(/\{[\s\S]*\}/);
     if (!match) return null;
     const parsed = JSON.parse(match[0]) as Partial<RouteDecision>;

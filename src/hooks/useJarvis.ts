@@ -287,10 +287,11 @@ export function useJarvis() {
         content: m.content,
         ...(m.imageBase64 && withImage ? { images: [m.imageBase64] } : {}),
       }));
-      const result = await lm.current!.complete({
-        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...hist],
-      });
-      return result.response;
+      const result = await lm.current!.completion([
+        { role: 'system', content: SYSTEM_PROMPT },
+        ...hist,
+      ]);
+      return result.content ?? result.text ?? '';
     };
 
     switch (step.route) {
@@ -548,7 +549,7 @@ export function useJarvis() {
   function friendlyConnectError(msg: string): string {
     const lower = msg.toLowerCase();
     if (lower.includes('no eligible') || lower.includes('no device')) {
-      return "Glasses aren't registering with Meta AI right now. Open the Meta AI app, make sure your glasses show as the active device there, then come back and tap Connect again.";
+      return "iPhone can't see the glasses over Bluetooth LE yet. Try: open the Meta AI app so it wakes the glasses, take them off and put them back on, or toggle Bluetooth off/on. Then tap Connect again.";
     }
     if (lower.includes('bluetooth')) {
       return 'Bluetooth unavailable. Enable Bluetooth on your iPhone, then try Connect again.';
@@ -667,14 +668,12 @@ export function useJarvis() {
     const decision = await routePrompt(effectiveText, Boolean(tc.imageBase64), lm.current, isCloudConfigured());
 
     const localComplete = async (withImage: boolean): Promise<string> => {
-      const result = await lm.current!.complete({
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: effectiveText,
-            ...(tc.imageBase64 && withImage ? { images: [tc.imageBase64] } : {}) },
-        ],
-      });
-      return result.response;
+      const result = await lm.current!.completion([
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: effectiveText,
+          ...(tc.imageBase64 && withImage ? { images: [tc.imageBase64] } : {}) },
+      ]);
+      return result.content ?? result.text ?? '';
     };
 
     let responseText: string;

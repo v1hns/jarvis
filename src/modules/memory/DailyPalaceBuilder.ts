@@ -127,12 +127,11 @@ export async function buildDailyPalace(
   }));
 
   try {
-    const { response } = await lm.complete({
-      messages: [
-        { role: 'system', content: PALACE_SYSTEM_PROMPT },
-        { role: 'user', content: JSON.stringify(compact) },
-      ],
-    });
+    const result = await lm.completion([
+      { role: 'system', content: PALACE_SYSTEM_PROMPT },
+      { role: 'user', content: JSON.stringify(compact) },
+    ]);
+    const response = result.content ?? result.text ?? '';
     const parsed = extractJson(response);
     if (parsed && Array.isArray(parsed.places) && Array.isArray(parsed.segments)) {
       const places = (parsed.places as Array<Record<string, unknown>>)

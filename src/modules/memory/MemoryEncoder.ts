@@ -74,12 +74,11 @@ export async function encodeEpisode(
 
   const attempt = async (extraNudge?: string): Promise<EpisodeRecord | null> => {
     try {
-      const { response } = await lm.complete({
-        messages: [
-          { role: 'system', content: ENCODE_SYSTEM_PROMPT + (extraNudge ?? '') },
-          { role: 'user', content: userPrompt, images: [imageBase64] },
-        ],
-      });
+      const result = await lm.completion([
+        { role: 'system', content: ENCODE_SYSTEM_PROMPT + (extraNudge ?? '') },
+        { role: 'user', content: userPrompt, images: [imageBase64] },
+      ] as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>);
+      const response = result.content ?? result.text ?? '';
       const parsed = extractJson(response);
       if (!parsed) return null;
       return coerceEpisode(parsed, timestampMs);
