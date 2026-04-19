@@ -20,6 +20,84 @@ Ray-Ban Glasses (mic + camera + speakers)
 
 The current prototype already connects to the glasses, captures audio, routes requests, and can answer locally or through cloud services. The intended product experience goes further: a hands-free agent that can understand what you say, see what you see, and put your laptop to work while you stay in motion.
 
+## Architecture At A Glance
+
+### Request Routing
+
+```mermaid
+flowchart LR
+    A["User speaks to Jarvis"] --> B["On-device router"]
+    B --> C["local_answer"]
+    B --> D["cloud_answer"]
+    B --> E["vision_query"]
+    B --> F["memory_query"]
+    B --> G["desktop_action"]
+    B --> H["clarify"]
+
+    C --> C1["Answer on iPhone with Cactus"]
+    D --> D1["Escalate to cloud Gemma"]
+    E --> E1["Capture frame from glasses"]
+    E1 --> E2["Vision model answers"]
+    F --> F1["Search episodic memory"]
+    F1 --> F2["Answer from memory evidence"]
+    G --> G1["Send task to laptop relay"]
+    G1 --> G2["Claude Code executes"]
+    H --> H1["Ask short follow-up question"]
+```
+
+### Episodic Memory Pipeline
+
+```mermaid
+flowchart TD
+    A["Glasses session is streaming"] --> B["Every 60s capture photo"]
+    B --> C["Memory encoder on-device"]
+    C --> D["Episode record"]
+
+    D --> D1["sceneSummary"]
+    D --> D2["placeLabel"]
+    D --> D3["objects"]
+    D --> D4["ocrText"]
+    D --> D5["activityHint"]
+    D --> D6["salience"]
+
+    D --> E["Store in today's episodes.json"]
+
+    E --> F["Daily rollover"]
+    F --> G["Build daily memory palace"]
+    G --> G1["places"]
+    G --> G2["segments"]
+    G --> G3["objectLastSeen"]
+    G --> G4["daySummary"]
+
+    G --> H["Save palace.json"]
+    H --> I["Delete old raw episodes"]
+
+    J["User asks memory question"] --> K["memory_query route"]
+    K --> L["Load today's episodes plus past palaces"]
+    L --> M["Retrieve best evidence"]
+    M --> N["Synthesize short spoken answer"]
+```
+
+### Desktop Execution And Confirmation
+
+```mermaid
+flowchart TD
+    A["User asks for laptop task"] --> B["desktop_action route"]
+    B --> C["Phone sends task to desktop relay"]
+    C --> D["Claude Code or OpenClaw runs task"]
+    D --> E["Progress events stream back to phone"]
+    E --> F["Jarvis speaks progress updates"]
+
+    D --> G{"Irreversible action?"}
+    G -- "No" --> H["Finish task"]
+    G -- "Yes" --> I["needs_confirmation event"]
+    I --> J["User says yes or no"]
+    J --> K["Phone sends CONFIRMED or CANCELLED"]
+    K --> D
+
+    H --> L["Final result spoken through glasses"]
+```
+
 ## Key Features
 
 - **Fast on-device answers for simple requests.** Jarvis should handle lightweight questions locally on the phone for speed and privacy.
