@@ -15,12 +15,9 @@
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
-  [WearablesURLHandler configureEarly]; // Ensures Wearables is ready for URL callbacks before JS starts
+  [WearablesURLHandler configureEarly];
   self.moduleName = @"Jarvis";
-  // You can add your custom initial props in the dictionary below.
-  // They will be passed down to the ViewController used by React Native.
   self.initialProps = @{};
-
   return [super application:application didFinishLaunchingWithOptions:launchOptions];
 }
 
@@ -31,14 +28,9 @@
 
 - (NSURL *)bundleURL
 {
-  NSURL *embedded = [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];
-#if DEBUG
-  // Use Metro if running, otherwise fall back to embedded bundle
-  NSURL *metro = [[RCTBundleURLProvider sharedSettings] jsBundleURLForBundleRoot:@"index"];
-  return embedded ? embedded : metro;
-#else
-  return embedded;
-#endif
+  NSString *path = [[NSBundle mainBundle] pathForResource:@"main" ofType:@"jsbundle"];
+  if (path) return [NSURL fileURLWithPath:path];
+  return [[RCTBundleURLProvider sharedSettings] jsBundleURLForBundleRoot:@"index"];
 }
 
 @end
