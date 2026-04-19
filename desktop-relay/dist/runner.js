@@ -1,10 +1,25 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TASK_PREAMBLE = void 0;
+exports.hasOpenClaw = hasOpenClaw;
 exports.buildMessage = buildMessage;
 exports.extractTextFromLine = extractTextFromLine;
 exports.runOpenClawTask = runOpenClawTask;
 const child_process_1 = require("child_process");
+let openClawPresence = null;
+/** Probe once per process — `openclaw --version` must exit 0 for dispatch. */
+function hasOpenClaw(spawnImpl = child_process_1.spawnSync) {
+    if (openClawPresence !== null)
+        return openClawPresence;
+    try {
+        const r = spawnImpl('openclaw', ['--version'], { stdio: 'ignore' });
+        openClawPresence = r.status === 0;
+    }
+    catch {
+        openClawPresence = false;
+    }
+    return openClawPresence;
+}
 const JARVIS_AGENT_ID = 'jarvis';
 /**
  * System prompt injected into every task message so Gemma 4 emits structured
@@ -69,6 +84,20 @@ function runOpenClawTask(payload, onEvent, geminiApiKey, deps = {}) {
     const message = buildMessage(payload);
     const sessionId = payload.session_id ?? `jarvis-${Date.now()}`;
     logger.log(`[relay] [${sessionId}] task: ${payload.task.slice(0, 120)}`);
+    if (!hasOpenClaw()) {
+        // Fail fast with a clear, spoken-aloud-friendly message instead of ENOENT.
+        logger.error('[relay] openclaw CLI not installed — run: npm install -g openclaw');
+        setTimeout(() => {
+            onEvent({
+                type: 'error',
+                payload: 'OpenClaw is not installed on your laptop. Install it with: npm install -g openclaw, ' +
+                    'then run: npm run setup-agent in the desktop-relay folder.',
+            });
+        }, 0);
+        // Return a no-op handle so the server can clean up normally.
+        const noopChild = { killed: true, stdin: null, kill: () => { } };
+        return { child: noopChild, sendConfirmation: () => { } };
+    }
     const child = spawnImpl('openclaw', [
         'agent',
         '--agent', JARVIS_AGENT_ID,

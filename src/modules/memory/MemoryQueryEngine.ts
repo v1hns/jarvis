@@ -280,12 +280,11 @@ export async function answerMemoryQuery(
 
   let answer: string;
   try {
-    const { response } = await mainLM.complete({
-      messages: [
-        { role: 'system', content: ANSWER_SYSTEM_PROMPT },
-        { role: 'user', content: `Question: ${query}\nContext JSON:\n${contextBlock}` },
-      ],
-    });
+    const result = await mainLM.completion([
+      { role: 'system', content: ANSWER_SYSTEM_PROMPT },
+      { role: 'user', content: `Question: ${query}\nContext JSON:\n${contextBlock}` },
+    ]);
+    const response = result.content ?? result.text ?? '';
     answer = sanitizeAnswer(response);
   } catch (err) {
     console.warn('[MemoryQueryEngine] synthesis failed:', err);

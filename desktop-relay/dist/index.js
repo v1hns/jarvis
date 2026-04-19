@@ -60,6 +60,7 @@ function createRelayHandler(options) {
                 ts: Date.now(),
                 agent: 'openclaw/jarvis',
                 model: 'google/gemma-4-27b-it',
+                openclawInstalled: (0, runner_js_1.hasOpenClaw)(),
             }));
             return;
         }

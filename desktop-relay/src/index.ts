@@ -1,6 +1,6 @@
 import http from 'http';
 import { config } from 'dotenv';
-import { runOpenClawTask } from './runner.js';
+import { runOpenClawTask, hasOpenClaw } from './runner.js';
 import type { BridgeEvent, TaskPayload, ConfirmPayload } from './types.js';
 
 export interface RelayServerOptions {
@@ -70,6 +70,7 @@ export function createRelayHandler(options: RelayServerOptions): http.RequestLis
         ts: Date.now(),
         agent: 'openclaw/jarvis',
         model: 'google/gemma-4-27b-it',
+        openclawInstalled: hasOpenClaw(),
       }));
       return;
     }
