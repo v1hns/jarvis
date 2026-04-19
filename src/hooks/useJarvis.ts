@@ -21,11 +21,23 @@ import {
 } from '../modules/TestHarness';
 import { MemoryOrchestrator } from '../modules/memory/MemoryOrchestrator';
 import { answerMemoryQuery } from '../modules/memory/MemoryQueryEngine';
+import {
+  appendTurn as appendConversationTurn,
+  clearTurns as clearConversationTurns,
+  loadTurns as loadConversationTurns,
+} from '../modules/memory/ConversationMemory';
+import { planTask, singleStepPlan, TaskPlan, SubTask } from '../modules/TaskPlanner';
 
-const SYSTEM_PROMPT = `You are Jarvis, a concise AI assistant running on Meta Ray-Ban smart glasses.
-Responses must be short (1-3 sentences) since they are spoken aloud.
-You can see through the glasses camera when the user shares an image.
-Be helpful, witty, and direct.`;
+const SYSTEM_PROMPT = `You are Jarvis, a personal AI assistant for Vihaan.
+You run on-device via Cactus with Google Gemma as your brain. You can escalate
+to cloud Gemma for heavy reasoning, use glasses or phone vision when available,
+recall the user's episodic memory, and delegate tasks to their laptop via
+OpenClaw + Claude Code.
+
+Style:
+- Short, natural, spoken-aloud-friendly (1–3 sentences by default).
+- Direct and witty. No filler, no apologies, no preamble.
+- When given a task you're executing via the laptop, narrate briefly.`;
 
 export interface Message {
   role: 'user' | 'assistant';
@@ -54,6 +66,12 @@ export function useJarvis() {
   const [needsConfirm, setNeedsConfirm]       = useState<string | null>(null);
   const [isRecording, setIsRecording]         = useState(false);
   const [testCases, setTestCases]             = useState<TestCase[]>([]);
+  // Phone-only chat: usable without glasses. Reuses the full routing / memory
+  // / desktop-delegation pipeline and phone mic + Apple/ElevenLabs speaker.
+  const [chatMode, setChatMode]               = useState(true);
+  const [isPhoneListening, setPhoneListening] = useState(false);
+  const [currentPlan, setCurrentPlan]         = useState<TaskPlan | null>(null);
+  const [activeStepId, setActiveStepId]       = useState<string | null>(null);
 
   const voiceActive     = useRef(false);
   const abortDesktop    = useRef<AbortController | null>(null);
@@ -76,8 +94,11 @@ export function useJarvis() {
       const perm = await MetaDAT.checkPermission();
       setPermStatus(perm);
 
-      const modelPath = `${RNFS.DocumentDirectoryPath}/qwen2.5-0.5b-q4.gguf`;
-      const modelUrl  = 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf';
+      // Gemma is the only on-device model Jarvis uses. Gemma 2 2B IT Q4 is
+      // the nearest Cactus-compatible GGUF build; the PRD's "Gemma 4 E4B"
+      // target drops in here when an official GGUF ships.
+      const modelPath = `${RNFS.DocumentDirectoryPath}/gemma-2-2b-it-q4.gguf`;
+      const modelUrl  = 'https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf';
 
       const exists = await RNFS.exists(modelPath);
       if (!exists) {
@@ -96,6 +117,16 @@ export function useJarvis() {
       await memoryOrch.current.init();
 
       setModelsReady(true);
+
+      // Replay persistent chat history into the visible message list
+      const prior = await loadConversationTurns();
+      if (prior.length > 0) {
+        setMessages(prior.map(t => ({
+          role: t.role,
+          content: t.content,
+          source: (t.route as Message['source']) ?? 'local',
+        })));
+      }
     }
     init().catch(console.error);
     loadCases().then(setTestCases).catch(console.error);
@@ -136,16 +167,38 @@ export function useJarvis() {
     try {
       await Voice.start('en-US');
       voiceActive.current = true;
+      setPhoneListening(true);
     } catch (e) {
       console.error('[Voice] start failed', e);
+      setPhoneListening(false);
     }
   }
 
   async function stopVoice() {
     try {
       voiceActive.current = false;
+      setPhoneListening(false);
       await Voice.stop();
     } catch {}
+  }
+
+  /** Phone-only push-to-talk — toggles the mic on/off when glasses aren't live. */
+  async function togglePhoneMic() {
+    if (voiceActive.current) await stopVoice();
+    else await startVoice();
+  }
+
+  /** Text input from the phone UI (chat mode or diagnostics). */
+  async function askText(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setTranscript(trimmed);
+    await reply(trimmed);
+  }
+
+  async function clearConversation() {
+    await clearConversationTurns();
+    setMessages([]);
   }
 
   // ─── Laptop heartbeat ────────────────────────────────────────────────────
@@ -218,7 +271,78 @@ export function useJarvis() {
       await saveCase(tc);
       setTestCases(await loadCases());
     }
-    if (voiceActive.current || sessionState === 'streaming') startVoice();
+    // Glasses path is hot-mic; phone chat is push-to-talk — no auto-restart.
+    if (sessionState === 'streaming') startVoice();
+  }
+
+  async function executeStep(
+    step: SubTask,
+    userText: string,
+    history: Message[],
+    imageBase64: string | undefined,
+  ): Promise<{ text: string; source: Message['source'] }> {
+    const localComplete = async (withImage: boolean): Promise<string> => {
+      const hist = history.map(m => ({
+        role: m.role,
+        content: m.content,
+        ...(m.imageBase64 && withImage ? { images: [m.imageBase64] } : {}),
+      }));
+      const result = await lm.current!.complete({
+        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...hist],
+      });
+      return result.response;
+    };
+
+    switch (step.route) {
+      case 'cloud_answer': {
+        if (!isCloudConfigured()) {
+          return { text: await localComplete(false), source: 'local' };
+        }
+        const text = await cloudComplete({
+          system: SYSTEM_PROMPT,
+          messages: history.map(m => ({ role: m.role, content: m.content })),
+        });
+        return { text, source: 'cloud' };
+      }
+
+      case 'vision_query': {
+        const frame = imageBase64 ?? (sessionState === 'streaming'
+          ? await MetaDAT.capturePhoto().catch(() => null)
+          : null);
+        if (frame && isVisionConfigured()) {
+          const text = await visionQuery(step.description || userText, frame);
+          return { text, source: 'vision' };
+        }
+        if (!frame) {
+          return {
+            text: "I'd need a photo to answer that. Connect the glasses or snap an image, then ask again.",
+            source: 'local',
+          };
+        }
+        return { text: await localComplete(true), source: 'vision' };
+      }
+
+      case 'desktop_action': {
+        const text = await handleDesktopAction(step.description || userText, history);
+        return { text, source: 'desktop' };
+      }
+
+      case 'memory_query': {
+        await memoryOrch.current?.runRollover();
+        const result = await answerMemoryQuery(lm.current!, step.description || userText);
+        return { text: result.answer, source: 'local' };
+      }
+
+      case 'clarify':
+        return {
+          text: `Quick check — ${step.description}. Want me to continue?`,
+          source: 'local',
+        };
+
+      case 'local_answer':
+      default:
+        return { text: await localComplete(false), source: 'local' };
+    }
   }
 
   async function reply(userText: string, imageBase64?: string) {
@@ -229,75 +353,60 @@ export function useJarvis() {
     setMessages(nextMessages);
     setIsThinking(true);
 
+    void appendConversationTurn({
+      role: 'user', content: userText, timestampMs: Date.now(),
+    });
+
     const decision = await routePrompt(userText, Boolean(imageBase64), lm.current, isCloudConfigured());
     setLastRoute(decision.route);
     lastRouteRef.current = decision.route;
     console.log(`[Router] ${decision.route} (${decision.confidence.toFixed(2)}) — ${decision.reason}`);
 
-    const localComplete = async (withImage: boolean): Promise<string> => {
-      const history = nextMessages.map(m => ({
-        role: m.role,
-        content: m.content,
-        ...(m.imageBase64 && withImage ? { images: [m.imageBase64] } : {}),
-      }));
-      const result = await lm.current!.complete({
-        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...history],
-      });
-      return result.response;
-    };
+    // Planner only runs for the heavy routes; simple ones stay single-step
+    // to preserve low-latency conversational feel.
+    const shouldPlan =
+      decision.route === 'desktop_action' ||
+      decision.route === 'cloud_answer' ||
+      userText.length > 160;
+    const plan: TaskPlan = shouldPlan
+      ? (await planTask(lm.current, userText)) ?? singleStepPlan(userText, decision.route)
+      : singleStepPlan(userText, decision.route);
+
+    setCurrentPlan(plan.steps.length > 1 ? plan : null);
 
     try {
-      let responseText: string;
-      let source: Message['source'] = 'local';
+      let finalText = '';
+      let finalSource: Message['source'] = 'local';
 
-      switch (decision.route) {
-        case 'cloud_answer':
-          responseText = await cloudComplete({
-            system: SYSTEM_PROMPT,
-            messages: nextMessages.map(m => ({ role: m.role, content: m.content })),
-          });
-          source = 'cloud';
-          break;
-
-        case 'vision_query': {
-          const frame = imageBase64 ?? (await MetaDAT.capturePhoto());
-          if (isVisionConfigured()) {
-            responseText = await visionQuery(userText, frame);
-          } else {
-            responseText = await localComplete(true);
-          }
-          source = 'vision';
-          break;
+      for (const step of plan.steps) {
+        setActiveStepId(step.id);
+        if (plan.steps.length > 1) {
+          setDesktopProgress(`${step.description}`);
         }
+        const { text, source } = await executeStep(
+          step, userText, nextMessages, imageBase64,
+        );
+        finalText = text;
+        finalSource = source;
 
-        case 'desktop_action':
-          responseText = await handleDesktopAction(userText, nextMessages);
-          source = 'desktop';
-          break;
-
-        case 'memory_query': {
-          await memoryOrch.current?.runRollover();
-          const result = await answerMemoryQuery(lm.current, userText);
-          responseText = result.answer;
-          source = 'local';
-          break;
+        if (plan.steps.length > 1) {
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: `• ${step.description}\n${text}`,
+            source,
+          }]);
         }
-
-        case 'clarify':
-          responseText = `I'm not sure what you meant — ${decision.reason}. Could you rephrase?`;
-          source = 'local';
-          break;
-
-        case 'local_answer':
-        default:
-          responseText = await localComplete(false);
-          source = 'local';
-          break;
       }
 
-      lastResponseRef.current = responseText;
-      setMessages(prev => [...prev, { role: 'assistant', content: responseText, source }]);
-      await speak(responseText);
+      if (plan.steps.length === 1) {
+        setMessages(prev => [...prev, { role: 'assistant', content: finalText, source: finalSource }]);
+      }
+
+      lastResponseRef.current = finalText;
+      void appendConversationTurn({
+        role: 'assistant', content: finalText, route: finalSource, timestampMs: Date.now(),
+      });
+      await speak(finalText);
     } catch (err: unknown) {
       const errText = err instanceof Error ? err.message : String(err);
       console.error(`[${decision.route}]`, errText);
@@ -310,6 +419,8 @@ export function useJarvis() {
     } finally {
       setIsThinking(false);
       setDesktopProgress('');
+      setActiveStepId(null);
+      setCurrentPlan(null);
     }
   }
 
@@ -570,8 +681,19 @@ export function useJarvis() {
     desktopProgress,
     needsConfirm,
     cloudModel: cloudModelName(),
+    cloudEnabled:   isCloudConfigured(),
+    visionEnabled:  isVisionConfigured(),
+    bridgeEnabled:  isBridgeConfigured(),
     registered,
     setupError,
+    chatMode,
+    isPhoneListening,
+    currentPlan,
+    activeStepId,
+    toggleChatMode: () => setChatMode(m => !m),
+    askText,
+    togglePhoneMic,
+    clearConversation,
     register,
     grantPermission,
     resetPairing,

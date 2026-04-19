@@ -1,5 +1,19 @@
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, spawnSync, ChildProcess } from 'child_process';
 import type { BridgeEvent, TaskPayload } from './types.js';
+
+let openClawPresence: boolean | null = null;
+
+/** Probe once per process — `openclaw --version` must exit 0 for dispatch. */
+export function hasOpenClaw(spawnImpl: typeof spawnSync = spawnSync): boolean {
+  if (openClawPresence !== null) return openClawPresence;
+  try {
+    const r = spawnImpl('openclaw', ['--version'], { stdio: 'ignore' });
+    openClawPresence = r.status === 0;
+  } catch {
+    openClawPresence = false;
+  }
+  return openClawPresence;
+}
 
 const JARVIS_AGENT_ID = 'jarvis';
 
@@ -91,6 +105,22 @@ export function runOpenClawTask(
   const sessionId = payload.session_id ?? `jarvis-${Date.now()}`;
 
   logger.log(`[relay] [${sessionId}] task: ${payload.task.slice(0, 120)}`);
+
+  if (!hasOpenClaw()) {
+    // Fail fast with a clear, spoken-aloud-friendly message instead of ENOENT.
+    logger.error('[relay] openclaw CLI not installed — run: npm install -g openclaw');
+    setTimeout(() => {
+      onEvent({
+        type: 'error',
+        payload:
+          'OpenClaw is not installed on your laptop. Install it with: npm install -g openclaw, ' +
+          'then run: npm run setup-agent in the desktop-relay folder.',
+      });
+    }, 0);
+    // Return a no-op handle so the server can clean up normally.
+    const noopChild = { killed: true, stdin: null, kill: () => {} } as unknown as ChildProcess;
+    return { child: noopChild, sendConfirmation: () => {} };
+  }
 
   const child = spawnImpl(
     'openclaw',
