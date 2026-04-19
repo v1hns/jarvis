@@ -2,8 +2,8 @@
 
 **Project:** Jarvis-on-Glasses
 **Owner:** Patrick
-**Status:** Pre-build / hackathon spec
-**Target platform:** iOS (iPhone 15+) + Ray-Ban Meta (2023 Wayfarer)
+**Status:** Prototype in progress / repo-synced PRD
+**Target platform:** iOS + Meta smart glasses
 **Date:** April 2026
 
 ---
@@ -22,11 +22,38 @@ A three-tier voice agent system built on hardware I already own:
 
 1. **Ray-Ban Meta glasses** act as the sensor and output surface — microphone captures my voice, camera captures my environment on demand, speaker delivers responses. Glasses stay on all day.
 
-2. **iPhone** runs the orchestrator: Gemma 4 E4B via Cactus on the Apple Neural Engine. This is the brain. It hears everything via the glasses' mic, wakes on "Hey Jarvis," classifies my intent, and decides what to do — answer locally, call a cloud vision model for environmental questions, or delegate a task to my laptop.
+2. **iPhone** runs the orchestrator in a React Native app with a thin native Swift bridge for Meta DAT. This is the brain. It listens while the glasses session is active, classifies my intent, and decides what to do — answer locally, call cloud models for harder reasoning or live vision questions, search recent episodic memory, or delegate a task to my laptop.
 
-3. **Laptop** runs Claude Code with computer use enabled, acting as the execution surface. When Jarvis decides a task requires my real desktop (read an email, update a spreadsheet, file a PR, draft a message), it ships the task to Claude Code over a local bridge. Claude Code does the work autonomously and messages back when done; the phone reads the result aloud through the glasses.
+3. **Laptop** runs Claude Code with computer use enabled, acting as the execution surface. When Jarvis decides a task requires my real desktop (read an email, update a spreadsheet, file a PR, draft a message), it ships the task to Claude Code over a local bridge. Claude Code does the work autonomously, can stream progress updates back to the phone, and pauses for confirmation before irreversible actions.
 
-The user experience is: I say "Hey Jarvis, what's on my desk?" and hear an answer 3 seconds later. Or I say "Hey Jarvis, find the Harvard acceptance letter email from March and draft a thank-you reply," keep walking, and 90 seconds later hear "Draft is ready for your review." The phone is the brain, the glasses are the I/O, and the laptop is the hands.
+The user experience is: I ask "Jarvis, what's on my desk?" and hear an answer a few seconds later. Or I say "Jarvis, find the Harvard acceptance letter email from March and draft a thank-you reply," keep walking, and later hear "Draft is ready for your review." Or I ask "Where did I leave my keys earlier?" and Jarvis answers from recent episodic memory built from images captured throughout the day. The phone is the brain, the glasses are the I/O, and the laptop is the hands.
+
+## Primary User And Wedge
+
+The initial wedge is **single-user laptop-native power users**:
+
+- founders, engineers, operators, PMs, and researchers
+- people whose real work already lives in email, docs, browser apps, code, and files
+- people who are frequently away from their desk but still need their computer to keep moving work forward
+
+The core job-to-be-done is:
+
+> "While I am walking, in transit, hands busy, or in the middle of something physical, keep my laptop useful without forcing me back into a phone UI."
+
+The highest-value v1 moments are:
+
+1. **Fast local help** for short spoken questions that should not require pulling out a phone.
+2. **Vision help** for "what am I looking at?" moments in the physical world.
+3. **Episodic memory recall** for "where did I leave that?" or "what did I do earlier?" moments.
+4. **Desktop delegation** for work that already lives on the user's own laptop.
+
+The product is **not** initially optimized for:
+
+- a general consumer voice-assistant replacement
+- multi-user households or shared-device memory
+- enterprise field-ops deployments with admin, compliance, or fleet-management requirements
+
+This wedge is intentionally narrow because it matches the current architecture: one user, one phone, one laptop, strong desktop leverage, and high tolerance for early-product rough edges in exchange for real time savings.
 
 ## User Stories
 
@@ -34,12 +61,12 @@ The user experience is: I say "Hey Jarvis, what's on my desk?" and hear an answe
 2. As a user, I want "Hey Jarvis" wake detection to run fully on-device, so that my audio never leaves my phone unless I intend for it to.
 3. As a user, I want the system to distinguish "Hey Jarvis" from "Hey Meta" reliably, so that Meta's own assistant and mine don't fight each other.
 4. As a user, I want to ask Jarvis a question about what I'm looking at ("what's this?", "read this to me", "what's on my desk?"), so that my glasses function as my eyes for the AI.
-5. As a user, I want the system to only capture a camera frame when the voice prompt actually needs vision, so that my glasses battery and privacy aren't wrecked by continuous streaming.
+5. As a user, I want the system to keep vision capture intentional — on-demand for live vision questions and low-frequency snapshots for episodic memory — so that battery and privacy stay sane.
 6. As a user, I want environmental questions to be answered in under 5 seconds of perceived latency, so that it feels like a conversation, not a query.
 7. As a user, I want Jarvis to speak answers through the glasses' speakers, so that I keep my eyes and hands free.
 8. As a user, I want Jarvis to use a voice that doesn't sound like a phone GPS, so that talking to it feels natural.
 9. As a user, I want to delegate tasks to my laptop by voice ("draft an email to X about Y", "find the file I was editing yesterday and summarize it", "open Gmail and triage my inbox"), so that I can put my computer to work while I'm away from it.
-10. As a user, I want the system to route decisions based on task capability — local answer vs. vision query vs. desktop action — so that each class of request goes to the right execution surface.
+10. As a user, I want the system to route decisions based on task capability — local answer vs. cloud answer vs. vision query vs. memory query vs. desktop action — so that each class of request goes to the right execution surface.
 11. As a user, I want the glasses to give me progress updates during long-running desktop tasks ("opening Gmail... drafting the email... done"), so that I know the system is working and when it's finished.
 12. As a user, I want Jarvis to stop *before* sending irreversible actions (sending emails, making payments, deleting files) and ask me to confirm, so that a misheard prompt or misinterpreted intent doesn't cause real-world damage.
 13. As a user, I want Jarvis to notice when it's not confident about my intent and ask a one-question clarification, so that ambiguous prompts don't silently go to the wrong execution surface.
@@ -50,48 +77,51 @@ The user experience is: I say "Hey Jarvis, what's on my desk?" and hear an answe
 18. As a developer, I want the routing logic to be modular and swappable, so that I can replace Gemma 4 with a different planner model later without rewriting the whole pipeline.
 19. As a developer, I want the desktop execution surface to be swappable, so that I can add OpenClaw support or a custom local agent later without touching the phone app.
 20. As a developer, I want each subsystem (wake word, STT, router, VLM client, bridge client) testable in isolation, so that I can iterate on one without breaking the others.
-21. As a user, I want a fallback mode where if Gemma 4 native audio input isn't reliable, the system falls back to Apple on-device STT, so that the voice path never fully breaks.
+21. As a user, I want a fallback mode where if the preferred on-device speech path isn't reliable, the system falls back to Apple on-device STT, so that the voice path never fully breaks.
 22. As a user, I want a fallback wake mode (long-press the glasses capture button) available in addition to "Hey Jarvis," so that if the hot-mic misbehaves on stage or in noisy environments I still have a reliable invocation path.
 23. As a user, I want the system to gracefully degrade if the laptop is asleep, offline, or Claude Code is down, so that Jarvis still works as an environmental Q&A assistant even when the desktop side is unavailable.
 24. As a hackathon demoer, I want a scripted 3-minute demo flow that exercises environment awareness, desktop delegation, and confidence-based clarification, so that I can reliably show the system's capabilities on stage.
 25. As a hackathon demoer, I want a canned staging environment (pre-logged-in apps, known desktop state, known physical props) so that computer-use actions on the laptop are reproducible and don't hit login walls or CAPTCHAs mid-demo.
+26. As a user, I want Jarvis to answer questions like "where did I leave my keys earlier?" or "what did I do this morning?" by searching a recent episodic memory built from glasses photos.
+27. As a user, I want episodic memory to stay local to my phone and expire automatically after a short retention window, so that Jarvis feels useful without becoming creepy.
 
 ## Implementation Decisions
 
 ### Platform & Stack
 
-- **Glasses:** Ray-Ban Meta 2023 Wayfarer. Integrated via the Meta Wearables Device Access Toolkit (iOS SDK, Swift 6). DAT provides camera frame capture and audio streaming. Glasses speakers are addressed as a standard iOS Bluetooth audio output — TTS output routes through normal iOS audio.
-- **Phone:** iPhone 15 or newer, iOS 17+. Native Swift app. No React Native, no Flutter. Rationale: Meta DAT is Swift-first, Cactus has a Swift binding with Apple NPU acceleration (shipped Jan 2026), and cross-platform has no demo-day benefit.
-- **On-device model:** Gemma 4 E4B (4.5B effective params, multimodal, 128K context) running via Cactus on the Apple Neural Engine. E4B chosen over E2B because E2B is too weak to be a reliable tool-calling planner. E4B is the *default* planner/answerer; complex prompts escalate to cloud Gemma (see below).
-- **Cloud Gemma (escalation path):** Google AI Studio–hosted Gemma 4 (default: `gemma-4-27b-it`, swappable). Same model family as on-device so the prompt surface is identical — Cactus handles simple/fast turns; the cloud model handles long-context, multi-step reasoning, or anything the local router flags as high-complexity. API key stored in `.env` as `GEMMA_API_KEY`, read at app startup and never logged.
+- **Glasses:** Meta smart glasses, with Ray-Ban Meta as the primary target. Integrated via the Meta Wearables Device Access Toolkit (iOS SDK, Swift). DAT provides session management, camera capture, and device state; glasses speakers are addressed as a standard iOS Bluetooth audio output.
+- **Phone:** iPhone, iOS-only. The app is a React Native shell with a native Swift module for Meta DAT and audio/session control. Rationale: fast product iteration in JS while keeping the hardware integration in the native layer where DAT requires it.
+- **On-device AI:** Cactus-hosted local models on the phone handle routing, short answers, memory encoding, and memory-query synthesis. The specific local model can evolve without changing the app surface.
+- **Cloud Gemma (escalation path):** Google AI Studio–hosted Gemma 4 (default: `gemma-4-27b-it`, swappable). Cloud Gemma handles long-context or higher-complexity reasoning that the local model should not shoulder. API key stored in `.env` as `GEMMA_API_KEY`, read at app startup and never logged.
 - **Desktop agent:** Claude Code with computer use enabled, running on the user's laptop. This is the "Dispatch pattern" — not the Claude-branded Dispatch product, but the same architectural idea: phone sends natural-language tasks to a local Claude instance that owns the desktop.
-- **Cloud VLM:** Claude Sonnet 4.6 (or Gemini, as a swappable provider) called from the phone directly over HTTPS when the router decides a prompt needs vision.
+- **Cloud VLM:** A swappable vision provider called directly from the phone over HTTPS when the router decides a prompt needs vision. Anthropic is the current implementation surface in the repo; Gemini-class alternatives remain viable.
 
 ### Audio pipeline
 
-- **Wake word:** Always-on hot-mic streaming from glasses over BT LE Audio to the phone. Wake detection is on-device. Primary path: Gemma 4 audio input (stretch / risky) if the Cactus Swift pipeline supports it end-to-end. **Fallback path: Picovoice Porcupine with a custom "Hey Jarvis" keyword.** The fallback is built in parallel from day one, not after the primary fails.
-- **Wake word phonetic isolation:** "Jarvis" chosen to be phonetically distant from "Meta" so the glasses' built-in Meta AI wake word and Jarvis don't collide on the same utterance.
-- **STT:** Primary path: Gemma 4 native audio input (ship audio tokens straight into E4B). **Fallback: Apple on-device `SFSpeechRecognizer`.** Fallback is not optional; it's the demo-safe path.
+- **Invocation mode:** The current prototype starts listening when the DAT session is actively streaming. A custom wake-word or button-to-arm layer can be added later without changing the downstream routing, memory, or desktop-task pipeline.
+- **STT:** The current prototype uses the phone's speech-recognition path for reliable transcription while connected to the glasses. Cactus owns the downstream local reasoning and memory inference. A fully Cactus-native speech path can be swapped in later if it proves reliable enough.
 - **TTS:** ElevenLabs Flash v2 streaming TTS for demo-grade voice quality. Audio streamed from phone to glasses as standard BT audio output. Apple `AVSpeechSynthesizer` as free offline fallback.
-- **Audio session management:** iOS audio session claimed for voice chat category. Accept that "Hey Meta" may still interrupt — design around it rather than trying to suppress it.
+- **Audio session management:** iOS audio session claimed for Bluetooth-capable voice input/output. Accept that "Hey Meta" or other system audio interruptions may still happen — design around them rather than trying to suppress them.
 
 ### Camera pipeline
 
-- **Capture mode:** On-demand only. Frames are grabbed via DAT when the router determines the current prompt requires vision. No continuous streaming. No background capture.
-- **Frame handling:** Captured frame is base64-encoded and sent along with the transcribed prompt directly to the cloud VLM. Frames are not persisted on the phone beyond the current request.
+- **Live vision capture:** Frames are grabbed via DAT when the router determines the current prompt requires vision. These frames are sent with the transcribed prompt to the cloud VLM and are not persisted as part of the live-vision request path.
+- **Episodic memory capture:** While the glasses session is streaming, the phone can sample a still photo roughly once per minute. Each sample is encoded into a compact `EpisodeRecord` (`sceneSummary`, `placeLabel`, `objects`, `ocrText`, `activityHint`, `salience`) and stored locally under a day key.
+- **Memory compression:** Older raw episode sets are rolled into a `DailyMemoryPalace` with canonical places, ordered day segments, object last-seen data, and a short day summary. Raw episodes for prior days are deleted after compression. This is not continuous video recording and not a permanent archive.
 
 ### Routing
 
-- **Router model:** Gemma 4 E4B (on-device) with a fixed system prompt describing available capabilities and a JSON-output tool-call format. Router always runs locally — we do not pay a round-trip to route.
-- **Routing strategy:** Capability-based. Gemma 4 classifies each prompt into one of:
+- **Router layer:** Routing always runs on-device. The current implementation uses a cheap heuristic fast-path first, then falls back to an on-device model classifier with a fixed system prompt and JSON output.
+- **Routing strategy:** Capability-based. Jarvis classifies each prompt into one of:
   - `local_answer` — general knowledge, chit-chat, simple reasoning the model can handle itself on-device
-  - `cloud_answer` — long-context, multi-step reasoning, code generation, or anything the router flags as beyond E4B's comfort zone; routed to cloud Gemma (`gemma-4-27b-it` via Google AI Studio)
+  - `cloud_answer` — long-context, multi-step reasoning, code generation, or anything the router flags as beyond the local model's comfort zone; routed to cloud Gemma (`gemma-4-27b-it` via Google AI Studio)
   - `vision_query` — requires a camera frame; routed to cloud VLM
+  - `memory_query` — asks about the recent past ("what did I do this morning?", "where did I leave my keys?", "when did I last see my notebook?")
   - `desktop_action` — requires the laptop; routed to the desktop agent bridge
   - `clarify` — confidence is low, ask a one-question follow-up before proceeding
-- **Local vs. cloud escalation:** The router emits a `complexity` score alongside its route. `local_answer` with high complexity is rewritten as `cloud_answer` before dispatch. Cloud escalation is preferred over on-device for: prompts longer than ~1k tokens, prompts requiring multi-step planning, prompts asking for code. Everything else stays local for latency + privacy.
-- **Confidence threshold:** Gemma 4 emits a confidence score (via prompt structure or logprob heuristic). Below threshold → `clarify` path. This is the routing safety net.
-- **No rule-based override layer** in v1. Router is pure Gemma. Confidence threshold + clarify path is the only safety net. (Rule-based overrides are a v2 addition if Gemma's routing proves unreliable in practice.)
+- **Local vs. cloud escalation:** Obvious high-complexity prompts are heuristically escalated to cloud even if the local model under-calls them. Prompts about the past preferentially route to `memory_query`, even if a live camera frame is available, because "where did I leave my keys?" is a retrieval problem, not a scene-description problem.
+- **Confidence threshold:** Low-confidence decisions are rewritten to `clarify`. This is the routing safety net.
+- **Heuristics vs. model:** v1 does not use a giant hand-built rule engine, but it does use thin heuristics for obvious desktop / memory / vision / complexity cases before asking the local model.
 
 ### Desktop bridge
 
@@ -104,49 +134,53 @@ The user experience is: I say "Hey Jarvis, what's on my desk?" and hear an answe
 ### Degradation modes
 
 - **Laptop offline / Claude Code unreachable:** Phone detects via bridge heartbeat. `desktop_action` prompts are responded to with "Your laptop isn't reachable right now — want me to remember this for later, or try to answer here?" Local and vision paths continue to work.
-- **Cloud VLM unavailable:** `vision_query` prompts fall back to Gemma 4 E4B's own vision capability on-device (slower, lower quality, but works).
-- **Primary wake-word path fails:** Fall back to Porcupine. No user-visible change.
-- **Primary STT path fails:** Fall back to Apple `SFSpeechRecognizer`. No user-visible change.
-- **All voice paths fail:** Long-press glasses capture button to manually open a listening window (DAT supports standard button events).
+- **Cloud VLM unavailable or unconfigured:** `vision_query` prompts fall back to the local model with the captured image when possible; if that is not good enough, Jarvis should fail softly and ask the user to retry or rephrase.
+- **Speech recognition glitches:** The app keeps the session alive and returns to listening, so the user can repeat themselves without re-pairing or rebuilding state.
+- **Laptop-side failure mid-task:** Relay errors surface back to the phone as spoken failure states rather than silent hangs.
 
 ### Modules
 
-The system decomposes into these deep modules, each with a narrow tested interface:
+The system decomposes into these modules, each with a narrow interface:
 
-1. **GlassesIO** — wraps Meta DAT. Exposes: `startAudioStream()`, `stopAudioStream()`, `captureFrame()`, `playAudio(pcmStream)`, `onButtonEvent(callback)`. Hides all DAT / BT plumbing behind these calls.
-2. **WakeDetector** — consumes an audio stream, fires a callback on wake. Two implementations behind a common protocol: `GemmaAudioWakeDetector` (primary) and `PorcupineWakeDetector` (fallback). Swappable at runtime.
-3. **Transcriber** — consumes an audio buffer, returns text. Two implementations: `GemmaTranscriber` and `AppleTranscriber`. Same protocol.
-4. **Router** — takes `{prompt: String, hasRecentFrame: Bool}`, returns a `RouteDecision` enum (`.localAnswer | .visionQuery | .desktopAction | .clarify`) with optional structured parameters. Wraps Gemma 4 E4B inference via Cactus.
-5. **LocalAnswerer** — takes text prompt, returns text reply via on-device Gemma 4 E4B (Cactus).
-6. **CloudGemmaClient** — takes text prompt (+ optional history), returns text reply via Google AI Studio Gemma API. Reads `GEMMA_API_KEY` from env. Model configurable (default `gemma-4-27b-it`).
-7. **VisionClient** — takes `{prompt: String, frame: Image}`, returns text reply. Wraps the cloud VLM API.
-8. **DesktopBridgeClient** — takes a structured task, returns a stream of progress events and a final result. Wraps the Tailscale-hosted relay.
-9. **Speaker** — takes text, plays it through glasses audio output. Two implementations: `ElevenLabsSpeaker` and `AppleSpeaker`. Same protocol.
-10. **Orchestrator** — the top-level coordinator. Subscribes to `WakeDetector`, runs the full turn: wake → transcribe → route → execute → speak. Owns the session state machine (idle / listening / thinking / executing / speaking).
+1. **MetaDATModule / MetaDAT** — native bridge to Meta DAT. Exposes session state, registration state, device state, and photo capture to the React Native app.
+2. **Transcriber** — turns the current spoken utterance into text while the glasses session is active.
+3. **Router** — takes `{prompt, hasImage, cloudEnabled}` and returns `local_answer | cloud_answer | vision_query | memory_query | desktop_action | clarify`. Thin heuristics run first; the on-device model resolves the ambiguous cases.
+4. **LocalAnswerer** — takes a text prompt and returns a short on-device spoken reply via Cactus.
+5. **CloudGemmaClient** — takes text prompt (+ optional history), returns text reply via Google AI Studio Gemma API. Reads `GEMMA_API_KEY` from env. Model configurable (default `gemma-4-27b-it`).
+6. **VisionClient** — takes `{prompt, frame}`, returns text reply. Wraps the cloud vision API.
+7. **DesktopBridgeClient** — takes a structured task, returns progress events, confirmation requests, and a final result. Wraps the laptop relay.
+8. **MemoryOrchestrator** — starts and stops with the glasses streaming session, samples periodic photos, and runs daily rollover work.
+9. **MemoryEncoder** — turns a sampled image into a structured `EpisodeRecord`.
+10. **MemoryStore** — local phone storage for day-partitioned `episodes.json` and `palace.json`, plus retention cleanup.
+11. **DailyPalaceBuilder** — compresses a day's raw episodes into a `DailyMemoryPalace` with places, segments, object last-seen lookup, and day summary.
+12. **MemoryQueryEngine** — parses temporal scope, gathers evidence from today's raw episodes plus prior day palaces, and synthesizes a short spoken answer.
+13. **Speaker** — takes text and plays it through the glasses audio output. Two implementations: `ElevenLabsSpeaker` and `AppleSpeaker`.
+14. **useJarvis / Orchestrator** — the top-level coordinator in the React Native app. Owns session state, routing, memory lifecycle, desktop relay interactions, and speech output.
 
 On the laptop:
 
-11. **DesktopRelay** — small Node or Swift-on-macOS process. Exposes an HTTP endpoint over Tailscale. Translates incoming tasks into Claude Code CLI invocations with computer use. Streams output back.
+15. **DesktopRelay** — small Node process. Exposes an HTTP endpoint over Tailscale. Translates incoming tasks into Claude Code CLI invocations with computer use and streams output back.
 
 ### API contracts
 
 - **Phone → Desktop relay:** JSON POST `{task: String, context: [...], confirm_before: [String], session_id: String}`. Streaming response of JSON events: `{type: "progress" | "needs_confirmation" | "result" | "error", payload: ...}`.
 - **Phone → Cloud VLM:** standard Anthropic Messages API with an image content block and a text prompt. No intermediary.
-- **Phone → Gemma 4 (via Cactus):** Cactus Swift SDK native call. Router uses a structured-output prompt format returning JSON.
+- **Phone → local model (via Cactus):** Cactus call from the mobile app. Router uses a structured-output prompt format returning JSON; local answering and memory synthesis use the same local inference surface.
 
 ## Testing Decisions
 
-Good tests for this system exercise externally observable behavior through module boundaries, not internal implementation. Inference-layer stuff (Cactus, Gemma output) is mockable because every module consuming it depends on a protocol, not a concrete class.
+Good tests for this system exercise externally observable behavior through module boundaries, not internal implementation. Inference-layer behavior is mockable because every module consuming it depends on a protocol, not a concrete class.
 
 Priority modules for tests:
 
-- **Router** — highest-value tests. Table-driven: (prompt, expected route, expected confidence band). Test the actual Gemma output against a fixed prompt set. Include adversarial ambiguous prompts that should land in `.clarify`. This is the module most likely to silently misbehave in production.
+- **Router** — highest-value tests. Table-driven: (prompt, expected route, expected confidence band). Test the actual local-router output against a fixed prompt set. Include adversarial ambiguous prompts that should land in `.clarify`. This is the module most likely to silently misbehave in production.
+- **MemoryQueryEngine + DailyPalaceBuilder** — retrieval tests for temporal prompts, "last seen" questions, broad summaries ("what did I do this morning?"), and compression correctness from raw episodes into palaces.
 - **DesktopBridgeClient** — tests against a mock relay. Verify streaming progress events are forwarded, confirmation flow round-trips, errors surface cleanly, heartbeat / offline detection works.
-- **Orchestrator state machine** — tests the turn lifecycle. Given mocked Router / VisionClient / etc., verify state transitions are correct and that concurrent wake events during an active turn are handled (probably: ignored until idle).
-- **GlassesIO** — integration test with the DAT Mock Device Kit (Meta ships one). Verify audio stream start/stop, frame capture, button events.
-- **Degradation paths** — explicit tests that with primary wake/STT disabled, the system still completes a full turn via fallbacks.
+- **Orchestrator state machine** — tests the turn lifecycle. Given mocked Router / VisionClient / MemoryQueryEngine / etc., verify state transitions are correct and that memory sampling only runs while the glasses session is streaming.
+- **Meta DAT bridge** — integration test with the DAT Mock Device Kit (Meta ships one). Verify audio stream start/stop, frame capture, and state propagation into JS.
+- **Retention / rollover** — explicit tests that older day folders age out, previous days compress into palaces, and raw episodes for prior days are deleted after successful compression.
 
-Deprioritized for v1 (but should exist eventually): WakeDetector implementations (hard to unit-test audio models reliably — rely on manual test in loud / quiet / "Hey Meta" collision scenarios), Speaker implementations (output quality is subjective).
+Deprioritized for v1 (but should exist eventually): custom wake/invocation experiments (hard to unit-test audio-trigger reliability — rely on manual testing in loud / quiet / interruption-heavy environments), Speaker implementations (output quality is subjective).
 
 No prior art in this codebase — greenfield project. Pattern to borrow from: Swift `protocol`-based DI with a `TestHarness` entry point that swaps concrete module implementations for mocks.
 
@@ -157,9 +191,9 @@ No prior art in this codebase — greenfield project. Pattern to borrow from: Sw
 - **Ray-Ban Meta Display (HUD).** Not in the Meta DAT preview, and not needed for a voice-first product.
 - **On-glasses UI rendering.** DAT doesn't support it in preview and we don't need it.
 - **Running Claude Code sessions without a laptop** — we are not trying to host Claude Code in the cloud for this project.
-- **Background / heartbeat autonomous tasks** (OpenClaw-style cron work). v1 is strictly reactive — user says something, system responds.
-- **Persistent memory across sessions.** No long-term user memory in v1. Each invocation starts from a clean router context. (Claude Code retains its own session state on the laptop.)
-- **Multi-turn conversations within a single wake event.** v1 is one turn per wake. Future work.
+- **Background / heartbeat autonomous tasks** (OpenClaw-style cron work). v1 is still not an autonomous agent. The system reacts to user requests; episodic snapshots during an active glasses session are in scope only because they support memory recall.
+- **Open-ended long-term autobiographical memory.** v1 keeps a short rolling episodic window on-device, compresses prior days into daily palaces, and expires older data automatically. This is working memory, not a permanent life log.
+- **Open-ended multi-turn conversations while continuously listening.** v1 is optimized for one request / one response loops, even if the glasses session itself stays connected.
 - **Integration with Meta AI itself.** We do not try to suppress, replace, or hook into "Hey Meta."
 - **OpenClaw integration.** Architecturally possible via the swappable desktop agent interface, but not built in v1.
 - **MedSentinel.** Separate project. Any Jarvis infrastructure is not shared with that pitch.
@@ -169,21 +203,21 @@ No prior art in this codebase — greenfield project. Pattern to borrow from: Sw
 
 ### Known risks (ordered by likelihood)
 
-1. **"Hey Meta" collides with "Hey Jarvis" on stage.** Mitigation: rehearse with glasses in hand, test phonetic distance empirically, have button-to-arm fallback ready one keystroke away.
-2. **Gemma 4 native audio input path isn't fully supported by Cactus's Swift SDK yet.** Mitigation: Porcupine + Apple STT fallback is built in parallel from day one, same protocol, swap is a config change.
+1. **Audio-session interruptions or speech-recognition misses make Jarvis feel flaky on stage.** Mitigation: rehearse in noisy settings, keep the glasses session warm before demo prompts, and make reconnect / retry flows fast and obvious.
+2. **Low-frequency episodic snapshots feel creepy or cost more battery than expected.** Mitigation: keep cadence conservative, keep storage on-device, expire old data automatically, and be explicit in the UX that memory is recent working memory rather than a permanent archive.
 3. **Claude Code computer use fails mid-demo on a live website.** Mitigation: canned staging environment, pre-logged-in apps, demo the draft not the send.
 4. **Hotel wifi blocks Tailscale.** Mitigation: test on the actual venue network days before; fallback is phone hotspot with the laptop tethered.
 5. **Glasses battery dies during extended demo rehearsal.** Mitigation: charge between run-throughs, have a second charged pair if possible, don't stream mic for longer than actually needed in rehearsal.
-6. **Gemma 4 router misroutes a prompt in a way the confidence threshold doesn't catch.** Mitigation: rehearse the demo script's prompts extensively so the team knows which prompts Gemma reliably routes correctly; for demo day, the script sticks to rehearsed prompts.
+6. **The local router misroutes a prompt in a way the confidence threshold doesn't catch.** Mitigation: rehearse the demo script's prompts extensively so the team knows which prompts the router reliably classifies; for demo day, the script sticks to rehearsed prompts.
 7. **Meta DAT rate-limits audio streaming or camera capture in ways not yet documented in the preview.** Mitigation: hit this early in build and design around whatever limit we find. Nothing to do before then.
 
 ### The ambitious bets (on the record)
 
 Three non-default choices were made with full awareness of the risks:
 
-- Hot-mic always-on wake detection (instead of button-to-arm)
-- Gemma 4 native audio as the primary STT path (instead of Apple STT)
-- Capability-based routing (instead of fixed tool routing)
+- React Native for the product shell, with a native Swift bridge only where Meta DAT requires it
+- Capability-based routing with local-first answers and selective cloud escalation
+- Episodic working memory built from low-frequency photos, rather than keeping the assistant stateless between turns
 
 Each has a documented fallback. None are allowed to block the demo path; the fallbacks are wired in parallel.
 
@@ -191,12 +225,12 @@ Each has a documented fallback. None are allowed to block the demo path; the fal
 
 3-minute flow, glasses-first:
 
-- **Scene 1 (30s) — environment QA:** User looks at a specific object ("what's this?"). Jarvis routes to cloud VLM, answers in ~3s through glasses.
-- **Scene 2 + 3 as one continuous flow (90s) — delegation with live narration:** User delegates a multi-step task to the laptop ("draft a thank-you email for the acceptance letter in my inbox"). Glasses give progress updates in real time while Claude Code works on the big screen behind the demo stage. Task stops at "draft ready for your review" — no auto-send.
-- **Scene 4 (30s) — mid-task correction:** User redirects Jarvis mid-execution ("wait, add a line about visiting campus in May"). System pivots, finishes. Shows that the orchestration is live, not a pre-recorded video.
-- **Close (30s):** Pitch the architecture — phone is the brain, glasses are the I/O, laptop is the hands. Gemma 4 on-device for privacy + routing; Claude Code for execution; all modular. Hand off.
+- **Scene 1 (30s) — environment QA:** User looks at a specific object ("what's this?"). Jarvis routes to vision, answers in a few seconds through glasses.
+- **Scene 2 (30s) — episodic memory recall:** User asks "where did I leave my keys earlier?" or "what did I do this morning?" Jarvis routes to `memory_query` and answers from recent memory evidence.
+- **Scene 3 (90s) — delegation with live narration:** User delegates a multi-step task to the laptop ("draft a thank-you email for the acceptance letter in my inbox"). Glasses give progress updates in real time while Claude Code works on the big screen behind the demo stage. Task stops at "draft ready for your review" — no auto-send.
+- **Close (30s):** Pitch the architecture — phone is the brain, glasses are the I/O, laptop is the hands, and episodic memory turns sampled images into working memory. Hand off.
 
 ### Open items
 
-- **The user story is underspecified.** This PRD describes what Jarvis *is* without pinning down *who it's for* beyond "power user / me." That's fine for a hackathon demo and a build spec, but before any shipping / fundraising conversation the wedge has to be sharpened. Candidate framings (founders/power users, field workers, accessibility, dev platform) remain open.
-- **Latency budget isn't formally measured yet.** Estimates in this doc are extrapolations from Cactus's published numbers and ElevenLabs' docs. First week of build should establish real measurements for: wake-to-transcribe, transcribe-to-route, route-to-cloud-VLM-first-audio, desktop-task-first-progress-event. Demo pacing depends on these being real numbers, not guesses.
+- **The second wedge after laptop-native power users is still open.** Candidate expansions include accessibility, field workers, and a broader prosumer wearable-assistant market, but the current PRD is intentionally centered on the single-user power-user case.
+- **Latency budget isn't formally measured yet.** Estimates in this doc are extrapolations from Cactus's published numbers and ElevenLabs' docs. First week of build should establish real measurements for: utterance-end-to-transcribe, transcribe-to-route, route-to-cloud-VLM-first-audio, memory-query-answer latency, and desktop-task-first-progress-event. Demo pacing depends on these being real numbers, not guesses.

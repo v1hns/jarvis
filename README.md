@@ -20,6 +20,20 @@ Ray-Ban Glasses (mic + camera + speakers)
 
 The current prototype already connects to the glasses, captures audio, routes requests, and can answer locally or through cloud services. The intended product experience goes further: a hands-free agent that can understand what you say, see what you see, and put your laptop to work while you stay in motion.
 
+## Who Jarvis Is For Right Now
+
+Jarvis is not trying to be a generic voice assistant for everyone on day one. The clearest first wedge is:
+
+- **Single-user laptop-native power users.** Founders, engineers, operators, PMs, and researchers who already live in email, docs, browser tabs, terminals, and cloud apps.
+- **People who keep leaving their desk but still need their computer.** The best moments are walking between meetings, commuting, doing errands, moving around the office, or working with hands occupied while the laptop still matters.
+- **Users who get immediate value from delegation.** Jarvis is strongest when it can answer a fast local question, inspect the world, remember something recent, or push a real desktop task forward while you stay in motion.
+
+Jarvis is **not** initially optimized for:
+
+- **A broad consumer assistant replacement.** It is more valuable as a high-agency tool for people with existing laptop workflows than as a Siri competitor.
+- **Multi-user family or shared-device scenarios.** The current product assumes one person, one phone, one laptop, and one recent memory stream.
+- **Heavy enterprise workflow orchestration.** Regulated multi-seat deployments, admin controls, and organization-wide policy layers are later concerns, not the first ship target.
+
 ## Architecture At A Glance
 
 ### Request Routing
