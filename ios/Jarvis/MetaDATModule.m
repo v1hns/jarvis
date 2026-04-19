@@ -9,6 +9,9 @@ RCT_EXTERN_METHOD(configure:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(startRegistration:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(startUnregistration:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 RCT_EXTERN_METHOD(checkPermission:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 

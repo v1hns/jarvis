@@ -9,7 +9,14 @@ import MWDATCamera
     try? Wearables.configure()
   }
   @objc static func handle(_ url: URL) {
-    Task { try? await Wearables.shared.handleUrl(url) }
+    Task {
+      do {
+        try await Wearables.shared.handleUrl(url)
+        NSLog("[WearablesURLHandler] handled callback: \(url.absoluteString)")
+      } catch {
+        NSLog("[WearablesURLHandler] handleUrl failed for \(url.absoluteString): \(error)")
+      }
+    }
   }
 }
 
@@ -49,7 +56,13 @@ class MetaDATModule: RCTEventEmitter {
     super.invalidate()
   }
 
-  override func startObserving() { hasListeners = true }
+  override func startObserving() {
+    hasListeners = true
+    // JS just attached — re-emit current registration state so Step 1/2 UI
+    // is correct even when the initial emit during configure() raced the listener.
+    let state = Wearables.shared.registrationState
+    sendEvent(withName: "onRegistrationStateChange", body: state.description)
+  }
   override func stopObserving()  { hasListeners = false }
 
   @objc override func addListener(_ eventName: String) { super.addListener(eventName) }
@@ -119,6 +132,18 @@ class MetaDATModule: RCTEventEmitter {
     }
   }
 
+  @objc func startUnregistration(_ resolve: @escaping RCTPromiseResolveBlock,
+                                  rejecter reject: @escaping RCTPromiseRejectBlock) {
+    Task {
+      do {
+        try await Wearables.shared.startUnregistration()
+        resolve(nil)
+      } catch {
+        reject("UNREGISTRATION_ERROR", error.localizedDescription, error)
+      }
+    }
+  }
+
   // MARK: - Permissions
 
   @objc func checkPermission(_ resolve: @escaping RCTPromiseResolveBlock,
@@ -142,14 +167,39 @@ class MetaDATModule: RCTEventEmitter {
       do {
         let status = try await Wearables.shared.requestPermission(.camera)
         resolve(status == .granted ? "granted" : "denied")
-      } catch PermissionError.noDevice, PermissionError.noDeviceWithConnection {
-        reject("PERMISSION_NO_DEVICE",
-               "Glasses not connected. Power them on and put them nearby first.",
-               nil)
-      } catch PermissionError.metaAINotInstalled {
-        reject("PERMISSION_ERROR", "Meta AI app is not installed.", nil)
+      } catch let err as PermissionError {
+        NSLog("[MetaDATModule] requestPermission PermissionError rawValue=\(err.rawValue)")
+        switch err {
+        case .noDevice, .noDeviceWithConnection:
+          reject("PERMISSION_NO_DEVICE",
+                 "Glasses not connected. Power them on and put them nearby first.",
+                 err)
+        case .metaAINotInstalled:
+          reject("PERMISSION_ERROR", "Meta AI app is not installed.", err)
+        case .connectionError:
+          reject("PERMISSION_ERROR",
+                 "Connection to Meta AI failed. Open the Meta AI app once, then retry.",
+                 err)
+        case .requestInProgress:
+          reject("PERMISSION_ERROR",
+                 "A permission request is already in progress. Wait a moment and retry.",
+                 err)
+        case .requestTimeout:
+          reject("PERMISSION_ERROR",
+                 "Meta AI didn't respond in time. Make sure the glasses are on and nearby, then retry.",
+                 err)
+        case .internalError:
+          reject("PERMISSION_ERROR",
+                 "Meta AI SDK internal error. Try Reset Pairing, re-register, and retry.",
+                 err)
+        @unknown default:
+          reject("PERMISSION_ERROR",
+                 "Unknown PermissionError case rawValue=\(err.rawValue)",
+                 err)
+        }
       } catch {
-        reject("PERMISSION_ERROR", error.localizedDescription, error)
+        NSLog("[MetaDATModule] requestPermission non-PermissionError: \(error)")
+        reject("PERMISSION_ERROR", "Unexpected error: \(error)", error)
       }
     }
   }

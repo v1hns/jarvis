@@ -21,7 +21,7 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
     devices, messages, isThinking, modelsReady,
     permStatus, registered, setupError, transcript, lastRoute,
     laptopOnline, desktopProgress, needsConfirm,
-    register, grantPermission, connect, connectSpecific,
+    register, grantPermission, resetPairing, connect, connectSpecific,
     snapAndAsk, disconnect, confirmDesktopAction,
   } = jarvis;
 
@@ -74,24 +74,24 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
         </View>
       )}
 
-      {modelsReady && permStatus === 'denied' && registered && (
+      {modelsReady && permStatus !== 'granted' && registered && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Step 2 — Grant Camera Access</Text>
-          <Text style={styles.hint}>Put your glasses on and nearby, then tap below to grant camera access in Meta AI.</Text>
+          <Text style={styles.hint}>
+            Power on your glasses and put them nearby. Camera permission is
+            granted through the glasses. If Meta AI shows "Something went
+            wrong," the saved pairing is stale — tap Reset Pairing and start
+            again.
+          </Text>
           {setupError && <Text style={styles.errorText}>{setupError}</Text>}
           <Pressable style={styles.btn} onPress={grantPermission}>
             <Text style={styles.btnTextVisible}>Grant Camera Access</Text>
           </Pressable>
-        </View>
-      )}
-
-      {modelsReady && permStatus === 'unknown' && registered && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Step 2 — Grant Camera Access</Text>
-          <Text style={styles.hint}>Power on your glasses and put them nearby. Camera permission is granted through the glasses.</Text>
-          {setupError && <Text style={styles.errorText}>{setupError}</Text>}
-          <Pressable style={styles.btn} onPress={grantPermission}>
-            <Text style={styles.btnTextVisible}>Grant Camera Access</Text>
+          <Pressable style={styles.btn} onPress={connect}>
+            <Text style={styles.btnText}>Try Connect Anyway</Text>
+          </Pressable>
+          <Pressable style={[styles.btn, styles.btnDanger]} onPress={resetPairing}>
+            <Text style={styles.btnText}>Reset Pairing</Text>
           </Pressable>
         </View>
       )}
