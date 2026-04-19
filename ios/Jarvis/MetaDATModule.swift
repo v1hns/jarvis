@@ -200,6 +200,38 @@ class MetaDATModule: RCTEventEmitter {
       .store(in: &cancellables)
   }
 
+  // MARK: - Test Harness (file-backed storage in app Documents)
+
+  private var testHarnessURL: URL {
+    FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+      .appendingPathComponent("jarvis_test_harness.json")
+  }
+
+  @objc func saveTestCasesJSON(_ json: String,
+                                resolver resolve: @escaping RCTPromiseResolveBlock,
+                                rejecter reject: @escaping RCTPromiseRejectBlock) {
+    do {
+      try json.write(to: testHarnessURL, atomically: true, encoding: .utf8)
+      resolve(nil)
+    } catch {
+      reject("FILE_ERROR", error.localizedDescription, error)
+    }
+  }
+
+  @objc func loadTestCasesJSON(_ resolve: @escaping RCTPromiseResolveBlock,
+                                rejecter reject: @escaping RCTPromiseRejectBlock) {
+    guard FileManager.default.fileExists(atPath: testHarnessURL.path) else {
+      resolve("[]")
+      return
+    }
+    do {
+      let json = try String(contentsOf: testHarnessURL, encoding: .utf8)
+      resolve(json)
+    } catch {
+      reject("FILE_ERROR", error.localizedDescription, error)
+    }
+  }
+
   @objc func addListener(_ eventName: String) {}
   @objc func removeListeners(_ count: Double) {}
 }

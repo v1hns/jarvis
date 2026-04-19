@@ -10,7 +10,11 @@ import {
 } from 'react-native';
 import { useJarvis, Message } from '../hooks/useJarvis';
 
-export function HomeScreen() {
+interface Props {
+  onDevMode: () => void;
+}
+
+export function HomeScreen({ onDevMode }: Props) {
   const {
     sessionState, isStreaming, isConnecting,
     devices, messages, isThinking, modelsReady,
@@ -44,6 +48,9 @@ export function HomeScreen() {
         {laptopOnline !== null && (
           <View style={[styles.laptopDot, { backgroundColor: laptopOnline ? '#00ff88' : '#555' }]} />
         )}
+        <Pressable onPress={onDevMode} style={styles.devBtn}>
+          <Text style={styles.devText}>DEV</Text>
+        </Pressable>
       </View>
 
       {/* Loading models */}
@@ -200,4 +207,6 @@ const styles = StyleSheet.create({
   confirmText:    { color: '#e0e0e0', fontSize: 14, lineHeight: 20 },
   confirmRow:     { flexDirection: 'row', gap: 8, marginTop: 4 },
   confirmYes:     { backgroundColor: '#00442211', borderColor: '#00884433' },
+  devBtn:         { marginLeft: 'auto', paddingHorizontal: 8, paddingVertical: 4 },
+  devText:        { color: '#1e1e1e', fontSize: 10, fontWeight: '700', letterSpacing: 1 },
 });

@@ -11,6 +11,10 @@ import {
   isBridgeConfigured,
   BridgeEvent,
 } from '../modules/DesktopBridgeClient';
+import {
+  TestCase, ReplayResult,
+  loadCases, saveCase, deleteCase, buildCase,
+} from '../modules/TestHarness';
 
 const SYSTEM_PROMPT = `You are Jarvis, a concise AI assistant running on Meta Ray-Ban smart glasses.
 Responses must be short (1-3 sentences) since they are spoken aloud.
@@ -39,11 +43,17 @@ export function useJarvis() {
   const [laptopOnline, setLaptopOnline]       = useState<boolean | null>(null);
   const [desktopProgress, setDesktopProgress] = useState<string>('');
   const [needsConfirm, setNeedsConfirm]       = useState<string | null>(null);
+  const [isRecording, setIsRecording]         = useState(false);
+  const [testCases, setTestCases]             = useState<TestCase[]>([]);
 
-  const audioBuffer    = useRef<number[]>([]);
-  const silenceTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const abortDesktop   = useRef<AbortController | null>(null);
-  const confirmResolve = useRef<((ans: boolean) => void) | null>(null);
+  const audioBuffer     = useRef<number[]>([]);
+  const silenceTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortDesktop    = useRef<AbortController | null>(null);
+  const confirmResolve  = useRef<((ans: boolean) => void) | null>(null);
+  const isRecordingRef  = useRef(false);
+  const lastRouteRef    = useRef<Route>('local_answer');
+  const lastResponseRef = useRef<string>('');
+  const latestFrameRef  = useRef<string | null>(null);
 
   // ─── Boot SDK + AI models ─────────────────────────────────────────────────
 
@@ -60,6 +70,7 @@ export function useJarvis() {
       setModelsReady(true);
     }
     init().catch(console.error);
+    loadCases().then(setTestCases).catch(console.error);
   }, []);
 
   // ─── Laptop heartbeat — probe every 30s while bridge is configured ────────
@@ -85,6 +96,10 @@ export function useJarvis() {
       addDATListener('onSessionStateChange', setSessionState),
       addDATListener('onDevicesChanged', setDevices),
 
+      addDATListener('onVideoFrame', ({ data }) => {
+        latestFrameRef.current = data;
+      }),
+
       addDATListener('onAudioChunk', ({ samples }) => {
         audioBuffer.current.push(...samples);
         if (silenceTimer.current) clearTimeout(silenceTimer.current);
@@ -106,10 +121,19 @@ export function useJarvis() {
 
   async function transcribeAndReply(audio: number[], imageBase64?: string) {
     if (!stt.current || !lm.current || !modelsReady) return;
+    const shouldCapture = isRecordingRef.current;
     const { text } = await stt.current.transcribe({ audio });
     if (!text.trim()) return;
     setTranscript(text);
     await reply(text, imageBase64);
+    if (shouldCapture) {
+      isRecordingRef.current = false;
+      setIsRecording(false);
+      const capturedImage = imageBase64 ?? latestFrameRef.current ?? undefined;
+      const tc = buildCase(audio, text, lastRouteRef.current, lastResponseRef.current, capturedImage);
+      await saveCase(tc);
+      setTestCases(await loadCases());
+    }
   }
 
   async function reply(userText: string, imageBase64?: string) {
@@ -122,6 +146,7 @@ export function useJarvis() {
 
     const decision = await routePrompt(userText, Boolean(imageBase64), lm.current);
     setLastRoute(decision.route);
+    lastRouteRef.current = decision.route;
     console.log(`[Router] ${decision.route} (${decision.confidence.toFixed(2)}) — ${decision.reason}`);
 
     const localComplete = async (withImage: boolean): Promise<string> => {
@@ -177,6 +202,7 @@ export function useJarvis() {
           break;
       }
 
+      lastResponseRef.current = responseText;
       setMessages(prev => [...prev, { role: 'assistant', content: responseText, source }]);
       await speak(responseText);
     } catch (err: unknown) {
@@ -286,6 +312,72 @@ export function useJarvis() {
     setNeedsConfirm(null);
   }
 
+  // ─── Test Harness ────────────────────────────────────────────────────────
+
+  function armRecording() {
+    isRecordingRef.current = true;
+    setIsRecording(true);
+  }
+
+  function disarmRecording() {
+    isRecordingRef.current = false;
+    setIsRecording(false);
+  }
+
+  async function replayCase(tc: TestCase): Promise<ReplayResult> {
+    if (!stt.current || !lm.current || !modelsReady) {
+      throw new Error('Models not ready');
+    }
+    const { text } = await stt.current.transcribe({ audio: tc.audioSamples });
+    const effectiveText = text.trim() || tc.capturedTranscript;
+
+    setIsThinking(true);
+    const decision = await routePrompt(effectiveText, Boolean(tc.imageBase64), lm.current);
+
+    const localComplete = async (withImage: boolean): Promise<string> => {
+      const result = await lm.current!.complete({
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: effectiveText,
+            ...(tc.imageBase64 && withImage ? { images: [tc.imageBase64] } : {}) },
+        ],
+      });
+      return result.response;
+    };
+
+    let responseText: string;
+    try {
+      switch (decision.route) {
+        case 'cloud_answer':
+          responseText = await cloudComplete({
+            system: SYSTEM_PROMPT,
+            messages: [{ role: 'user', content: effectiveText }],
+          });
+          break;
+        case 'vision_query':
+          responseText = await localComplete(true);
+          break;
+        case 'desktop_action':
+          responseText = 'Desktop bridge not yet implemented.';
+          break;
+        case 'clarify':
+          responseText = `Ambiguous: ${decision.reason}`;
+          break;
+        default:
+          responseText = await localComplete(false);
+      }
+    } finally {
+      setIsThinking(false);
+    }
+
+    return { caseId: tc.id, newTranscript: effectiveText, newRoute: decision.route, newResponse: responseText };
+  }
+
+  async function removeTestCase(id: string) {
+    await deleteCase(id);
+    setTestCases(await loadCases());
+  }
+
   return {
     sessionState,
     isStreaming:    sessionState === 'streaming',
@@ -308,5 +400,11 @@ export function useJarvis() {
     snapAndAsk,
     disconnect,
     confirmDesktopAction,
+    isRecording,
+    armRecording,
+    disarmRecording,
+    testCases,
+    replayCase,
+    removeTestCase,
   };
 }

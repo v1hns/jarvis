@@ -30,3 +30,10 @@ RCT_EXTERN_METHOD(capturePhoto:(RCTPromiseResolveBlock)resolve
 
 RCT_EXTERN_METHOD(startAudio:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(saveTestCasesJSON:(NSString *)json
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(loadTestCasesJSON:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
