@@ -7,6 +7,7 @@ import { visionQuery, isVisionConfigured } from '../modules/AnthropicVision';
 import { speak, stopSpeaking } from '../modules/Speaker';
 import {
   sendTask,
+  sendConfirmation,
   checkHeartbeat,
   isBridgeConfigured,
   BridgeEvent,
@@ -49,6 +50,7 @@ export function useJarvis() {
   const audioBuffer     = useRef<number[]>([]);
   const silenceTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortDesktop    = useRef<AbortController | null>(null);
+  const desktopSession  = useRef<string | null>(null);
   const confirmResolve  = useRef<((ans: boolean) => void) | null>(null);
   const isRecordingRef  = useRef(false);
   const lastRouteRef    = useRef<Route>('local_answer');
@@ -232,7 +234,10 @@ export function useJarvis() {
       return "Your laptop isn't reachable right now. Make sure Tailscale is running on both devices and desktop-relay is started.";
     }
 
-    abortDesktop.current = new AbortController();
+    const sessionId = `jarvis-${Date.now()}`;
+    const desktopAbort = new AbortController();
+    abortDesktop.current = desktopAbort;
+    desktopSession.current = sessionId;
 
     const handleEvent = async (event: BridgeEvent) => {
       switch (event.type) {
@@ -244,10 +249,28 @@ export function useJarvis() {
         case 'needs_confirmation': {
           setNeedsConfirm(event.payload);
           await speak(`I need your confirmation before continuing. ${event.payload} Say yes to confirm or no to cancel.`);
-          // Wait for voice confirmation (resolved by confirmDesktopAction)
-          await new Promise<boolean>(resolve => {
+          const confirmed = await new Promise<boolean>(resolve => {
             confirmResolve.current = resolve;
           });
+          if (desktopAbort.signal.aborted) break;
+          setDesktopProgress(confirmed ? 'Confirmation sent…' : 'Cancelling task…');
+          try {
+            await sendConfirmation(
+              sessionId,
+              confirmed ? 'CONFIRMED' : 'CANCELLED',
+              desktopAbort.signal,
+            );
+          } catch (err: unknown) {
+            const errText = err instanceof Error ? err.message : String(err);
+            setDesktopProgress('');
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              content: `Desktop confirmation failed: ${errText}`,
+              source: 'desktop',
+            }]);
+            await speak('I could not send that confirmation to your laptop.');
+            desktopAbort.abort();
+          }
           break;
         }
 
@@ -257,18 +280,29 @@ export function useJarvis() {
       }
     };
 
-    const result = await sendTask(
-      {
-        task: userText,
-        context: history.slice(-6).map(m => ({ role: m.role, content: m.content })),
-        confirm_before: ['send', 'pay', 'delete', 'submit', 'post'],
-      },
-      handleEvent,
-      abortDesktop.current.signal,
-    );
-
-    setNeedsConfirm(null);
-    return result || 'Task completed on your laptop.';
+    try {
+      const result = await sendTask(
+        {
+          task: userText,
+          context: history.slice(-6).map(m => ({ role: m.role, content: m.content })),
+          confirm_before: ['send', 'pay', 'delete', 'submit', 'post'],
+          session_id: sessionId,
+        },
+        handleEvent,
+        desktopAbort.signal,
+      );
+      setNeedsConfirm(null);
+      return result || 'Task completed on your laptop.';
+    } finally {
+      setNeedsConfirm(null);
+      if (abortDesktop.current === desktopAbort) {
+        abortDesktop.current = null;
+      }
+      if (desktopSession.current === sessionId) {
+        desktopSession.current = null;
+      }
+      confirmResolve.current = null;
+    }
   }
 
   // Called by HomeScreen when user voice-confirms or cancels a desktop action
@@ -305,6 +339,9 @@ export function useJarvis() {
 
   async function disconnect() {
     stopSpeaking();
+    confirmResolve.current?.(false);
+    confirmResolve.current = null;
+    desktopSession.current = null;
     abortDesktop.current?.abort();
     await MetaDAT.stopSession();
     setMessages([]);
