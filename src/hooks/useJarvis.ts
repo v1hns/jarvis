@@ -570,33 +570,15 @@ export function useJarvis() {
 
   async function connect() {
     setSetupError(null);
-    // First attempt: immediate — for users whose glasses are already in DAT
     try {
+      // Resolves immediately; session state transitions (waitingForDevice →
+      // starting → streaming) drive the UI. If glasses are nearby and
+      // permissioned, this completes within a couple seconds.
       await MetaDAT.startAutoSession();
-      return;
-    } catch (firstErr: unknown) {
-      const firstMsg = firstErr instanceof Error ? firstErr.message : String(firstErr);
-      const noDevice = /no eligible|no device/i.test(firstMsg);
-      if (!noDevice) {
-        console.warn('[connect]', firstMsg);
-        setSetupError(friendlyConnectError(firstMsg));
-        return;
-      }
-      // Glasses not yet discovered — wait up to 6s for DAT to see them
-      setSetupError('Looking for your glasses…');
-      const found = await waitForDevice(6000);
-      if (!found) {
-        setSetupError(friendlyConnectError(firstMsg));
-        return;
-      }
-      try {
-        await MetaDAT.startAutoSession();
-        setSetupError(null);
-      } catch (secondErr: unknown) {
-        const msg = secondErr instanceof Error ? secondErr.message : String(secondErr);
-        console.warn('[connect retry]', msg);
-        setSetupError(friendlyConnectError(msg));
-      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn('[connect]', msg);
+      setSetupError(friendlyConnectError(msg));
     }
   }
 

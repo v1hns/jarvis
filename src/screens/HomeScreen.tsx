@@ -205,7 +205,10 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
         {isConnecting && (
           <View style={styles.connectRow}>
             <ActivityIndicator color="#ffaa00" />
-            <Text style={styles.mutedText}>Waiting for glasses…</Text>
+            <Text style={styles.mutedText}>Waiting for glasses… open Meta AI to wake them.</Text>
+            <Pressable style={styles.pillBtnGhost} onPress={disconnect}>
+              <Text style={styles.pillTextGhost}>Cancel</Text>
+            </Pressable>
           </View>
         )}
 

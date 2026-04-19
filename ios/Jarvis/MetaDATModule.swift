@@ -50,7 +50,6 @@ import MWDATCamera
 @objc(MetaDATModule)
 class MetaDATModule: RCTEventEmitter {
 
-  private var deviceSession: DeviceSession?
   private var streamSession: StreamSession?
   private var listenerTokens: [any AnyListenerToken] = []
   private var audioEngine: AVAudioEngine?
@@ -77,7 +76,6 @@ class MetaDATModule: RCTEventEmitter {
       listenerTokens.removeAll()
       if let s = streamSession { await s.stop() }
       streamSession = nil
-      deviceSession = nil
     }
     stopAudioEngine()
     super.invalidate()
@@ -250,22 +248,16 @@ class MetaDATModule: RCTEventEmitter {
   @objc func startAutoSession(_ resolve: @escaping RCTPromiseResolveBlock,
                                rejecter reject: @escaping RCTPromiseRejectBlock) {
     Task {
-      do {
-        let selector = AutoDeviceSelector(wearables: Wearables.shared)
-        let dSession = try Wearables.shared.createSession(deviceSelector: selector)
-        try dSession.start()
-        guard let sSession = try dSession.addStream() else {
-          reject("SESSION_ERROR", "Failed to create stream session", nil)
-          return
-        }
-        self.deviceSession = dSession
-        self.streamSession = sSession
-        self.attachListeners(to: sSession)
-        await sSession.start()
-        resolve(nil)
-      } catch {
-        reject("SESSION_ERROR", error.localizedDescription, error)
-      }
+      DATLogger.shared.log("[Session] startAutoSession called")
+      let sSession = StreamSession(
+        streamSessionConfig: StreamSessionConfig(),
+        deviceSelector: AutoDeviceSelector()
+      )
+      self.streamSession = sSession
+      self.attachListeners(to: sSession)
+      sSession.start()
+      DATLogger.shared.log("[Session] startAutoSession start() invoked — waiting for device transitions")
+      resolve(nil)
     }
   }
 
@@ -273,22 +265,22 @@ class MetaDATModule: RCTEventEmitter {
                            resolver resolve: @escaping RCTPromiseResolveBlock,
                            rejecter reject: @escaping RCTPromiseRejectBlock) {
     Task {
-      do {
-        let selector = SpecificDeviceSelector(device: deviceId)
-        let dSession = try Wearables.shared.createSession(deviceSelector: selector)
-        try dSession.start()
-        guard let sSession = try dSession.addStream() else {
-          reject("SESSION_ERROR", "Failed to create stream session", nil)
-          return
-        }
-        self.deviceSession = dSession
-        self.streamSession = sSession
-        self.attachListeners(to: sSession)
-        await sSession.start()
-        resolve(nil)
-      } catch {
-        reject("SESSION_ERROR", error.localizedDescription, error)
+      DATLogger.shared.log("[Session] startSession(\(deviceId)) called")
+      guard let device = Wearables.shared.deviceForIdentifier(deviceId) else {
+        let msg = "No device for id \(deviceId). Open Meta AI to wake glasses, then retry."
+        DATLogger.shared.log("[Session] startSession FAILED: \(msg)")
+        reject("SESSION_NO_DEVICE", msg, nil)
+        return
       }
+      let sSession = StreamSession(
+        streamSessionConfig: StreamSessionConfig(),
+        deviceSelector: SpecificDeviceSelector(device: device)
+      )
+      self.streamSession = sSession
+      self.attachListeners(to: sSession)
+      sSession.start()
+      DATLogger.shared.log("[Session] startSession start() invoked — waiting for device transitions")
+      resolve(nil)
     }
   }
 
@@ -299,7 +291,6 @@ class MetaDATModule: RCTEventEmitter {
       listenerTokens.removeAll()
       if let s = streamSession { await s.stop() }
       streamSession = nil
-      deviceSession = nil
       stopAudioEngine()
       resolve(nil)
     }
