@@ -20,6 +20,9 @@ android/app/secrets.properties
 # Android local config (contains GITHUB_TOKEN)
 android/local.properties
 
+# Test build output
+test-dist/
+
 # Misc
 .env
 .DS_Store

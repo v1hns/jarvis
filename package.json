@@ -6,7 +6,9 @@
     "ios": "react-native run-ios --device",
     "start": "react-native start",
     "lint": "eslint .",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test:build": "tsc -p tsconfig.test.json",
+    "test": "npm run test:build && node --test test/*.test.js"
   },
   "dependencies": {
     "cactus-react-native": "^0.1.0",

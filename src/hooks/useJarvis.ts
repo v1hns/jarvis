@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CactusLM, CactusSTT } from 'cactus-react-native';
 import { MetaDAT, addDATListener, SessionState, DeviceInfo } from '../modules/MetaDAT';
 import { route as routePrompt, Route } from '../modules/Router';
-import { cloudComplete, cloudModelName } from '../modules/GemmaCloud';
+import { cloudComplete, cloudModelName, isCloudConfigured } from '../modules/GemmaCloud';
 import { visionQuery, isVisionConfigured } from '../modules/AnthropicVision';
 import { speak, stopSpeaking } from '../modules/Speaker';
 import {
@@ -146,7 +146,7 @@ export function useJarvis() {
     setMessages(nextMessages);
     setIsThinking(true);
 
-    const decision = await routePrompt(userText, Boolean(imageBase64), lm.current);
+    const decision = await routePrompt(userText, Boolean(imageBase64), lm.current, isCloudConfigured());
     setLastRoute(decision.route);
     lastRouteRef.current = decision.route;
     console.log(`[Router] ${decision.route} (${decision.confidence.toFixed(2)}) — ${decision.reason}`);
@@ -369,7 +369,7 @@ export function useJarvis() {
     const effectiveText = text.trim() || tc.capturedTranscript;
 
     setIsThinking(true);
-    const decision = await routePrompt(effectiveText, Boolean(tc.imageBase64), lm.current);
+    const decision = await routePrompt(effectiveText, Boolean(tc.imageBase64), lm.current, isCloudConfigured());
 
     const localComplete = async (withImage: boolean): Promise<string> => {
       const result = await lm.current!.complete({
