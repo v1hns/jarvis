@@ -1,15 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { CactusLM } from 'cactus-react-native';
 import RNFS from 'react-native-fs';
 import Voice, { SpeechResultsEvent, SpeechErrorEvent } from '@react-native-voice/voice';
 import { MetaDAT, addDATListener, SessionState, DeviceInfo } from '../modules/MetaDAT';
 import { route as routePrompt, Route } from '../modules/Router';
-import { cloudComplete, cloudModelName } from '../modules/GemmaCloud';
+import { cloudComplete, cloudModelName, isCloudConfigured } from '../modules/GemmaCloud';
 import { visionQuery, isVisionConfigured } from '../modules/AnthropicVision';
 import { speak, stopSpeaking } from '../modules/Speaker';
 import {
   sendTask,
+  sendConfirmation,
   checkHeartbeat,
   isBridgeConfigured,
   BridgeEvent,
@@ -18,6 +19,8 @@ import {
   TestCase, ReplayResult,
   loadCases, saveCase, deleteCase, buildCase,
 } from '../modules/TestHarness';
+import { MemoryOrchestrator } from '../modules/memory/MemoryOrchestrator';
+import { answerMemoryQuery } from '../modules/memory/MemoryQueryEngine';
 
 const SYSTEM_PROMPT = `You are Jarvis, a concise AI assistant running on Meta Ray-Ban smart glasses.
 Responses must be short (1-3 sentences) since they are spoken aloud.
@@ -32,7 +35,9 @@ export interface Message {
 }
 
 export function useJarvis() {
-  const lm = useRef<CactusLM | null>(null);
+  const lm         = useRef<CactusLM | null>(null);
+  const memoryLM   = useRef<CactusLM | null>(null);
+  const memoryOrch = useRef<MemoryOrchestrator | null>(null);
 
   const [sessionState, setSessionState]       = useState<SessionState>('stopped');
   const [devices, setDevices]                 = useState<DeviceInfo[]>([]);
@@ -50,6 +55,7 @@ export function useJarvis() {
 
   const voiceActive     = useRef(false);
   const abortDesktop    = useRef<AbortController | null>(null);
+  const desktopSession  = useRef<string | null>(null);
   const confirmResolve  = useRef<((ans: boolean) => void) | null>(null);
   const isRecordingRef  = useRef(false);
   const lastRouteRef    = useRef<Route>('local_answer');
@@ -69,21 +75,26 @@ export function useJarvis() {
       setPermStatus(perm);
 
       const modelPath = `${RNFS.DocumentDirectoryPath}/qwen2.5-0.5b-q4.gguf`;
-      const modelUrl = 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf';
+      const modelUrl  = 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf';
 
       const exists = await RNFS.exists(modelPath);
       if (!exists) {
-        console.log('[CactusLM] Downloading model...');
+        console.log('[CactusLM] Downloading model…');
         await RNFS.downloadFile({ fromUrl: modelUrl, toFile: modelPath }).promise;
         console.log('[CactusLM] Model downloaded');
       }
 
-      const { lm: model, error } = await CactusLM.init({ model: modelPath });
-      if (error || !model) {
-        console.error('[CactusLM] init failed', error);
-        return;
-      }
-      lm.current = model;
+      const { lm: mainModel, error: lmErr } = await CactusLM.init({ model: modelPath });
+      if (lmErr || !mainModel) { console.error('[CactusLM] init failed', lmErr); return; }
+      lm.current = mainModel;
+
+      const { lm: memModel, error: memErr } = await CactusLM.init({ model: modelPath });
+      if (memErr || !memModel) { console.error('[CactusLM] memory init failed', memErr); return; }
+      memoryLM.current = memModel;
+
+      memoryOrch.current = new MemoryOrchestrator(memoryLM.current);
+      await memoryOrch.current.init();
+
       setModelsReady(true);
     }
     init().catch(console.error);
@@ -112,7 +123,6 @@ export function useJarvis() {
     };
 
     Voice.onSpeechError = (e: SpeechErrorEvent) => {
-      // Restart listening unless we're shutting down
       if (voiceActive.current) startVoice();
     };
 
@@ -154,6 +164,19 @@ export function useJarvis() {
     return () => { active = false; };
   }, []);
 
+  // ─── Memory orchestrator lifecycle ───────────────────────────────────────
+
+  useEffect(() => {
+    const orch = memoryOrch.current;
+    if (!orch) return;
+    if (sessionState === 'streaming') {
+      orch.runRollover().catch(err => console.warn('[Memory] rollover failed:', err));
+      orch.start();
+    } else {
+      orch.stop();
+    }
+  }, [sessionState]);
+
   // ─── Meta DAT event subscriptions ───────────────────────────────────────
 
   useEffect(() => {
@@ -191,7 +214,6 @@ export function useJarvis() {
       await saveCase(tc);
       setTestCases(await loadCases());
     }
-    // Restart listening after reply
     if (voiceActive.current || sessionState === 'streaming') startVoice();
   }
 
@@ -203,7 +225,7 @@ export function useJarvis() {
     setMessages(nextMessages);
     setIsThinking(true);
 
-    const decision = await routePrompt(userText, Boolean(imageBase64), lm.current);
+    const decision = await routePrompt(userText, Boolean(imageBase64), lm.current, isCloudConfigured());
     setLastRoute(decision.route);
     lastRouteRef.current = decision.route;
     console.log(`[Router] ${decision.route} (${decision.confidence.toFixed(2)}) — ${decision.reason}`);
@@ -249,6 +271,14 @@ export function useJarvis() {
           source = 'desktop';
           break;
 
+        case 'memory_query': {
+          await memoryOrch.current?.runRollover();
+          const result = await answerMemoryQuery(lm.current, userText);
+          responseText = result.answer;
+          source = 'local';
+          break;
+        }
+
         case 'clarify':
           responseText = `I'm not sure what you meant — ${decision.reason}. Could you rephrase?`;
           source = 'local';
@@ -290,7 +320,10 @@ export function useJarvis() {
       return "Your laptop isn't reachable right now. Make sure Tailscale is running on both devices and desktop-relay is started.";
     }
 
-    abortDesktop.current = new AbortController();
+    const sessionId = `jarvis-${Date.now()}`;
+    const desktopAbort = new AbortController();
+    abortDesktop.current = desktopAbort;
+    desktopSession.current = sessionId;
 
     const handleEvent = async (event: BridgeEvent) => {
       switch (event.type) {
@@ -298,30 +331,60 @@ export function useJarvis() {
           setDesktopProgress(event.payload);
           await speak(event.payload);
           break;
+
         case 'needs_confirmation': {
           setNeedsConfirm(event.payload);
           await speak(`I need your confirmation before continuing. ${event.payload} Say yes to confirm or no to cancel.`);
-          await new Promise<boolean>(resolve => { confirmResolve.current = resolve; });
+          const confirmed = await new Promise<boolean>(resolve => {
+            confirmResolve.current = resolve;
+          });
+          if (desktopAbort.signal.aborted) break;
+          setDesktopProgress(confirmed ? 'Confirmation sent…' : 'Cancelling task…');
+          try {
+            await sendConfirmation(
+              sessionId,
+              confirmed ? 'CONFIRMED' : 'CANCELLED',
+              desktopAbort.signal,
+            );
+          } catch (err: unknown) {
+            const errText = err instanceof Error ? err.message : String(err);
+            setDesktopProgress('');
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              content: `Desktop confirmation failed: ${errText}`,
+              source: 'desktop',
+            }]);
+            await speak('I could not send that confirmation to your laptop.');
+            desktopAbort.abort();
+          }
           break;
         }
+
         case 'error':
           console.error('[Bridge]', event.payload);
           break;
       }
     };
 
-    const result = await sendTask(
-      {
-        task: userText,
-        context: history.slice(-6).map(m => ({ role: m.role, content: m.content })),
-        confirm_before: ['send', 'pay', 'delete', 'submit', 'post'],
-      },
-      handleEvent,
-      abortDesktop.current.signal,
-    );
-
-    setNeedsConfirm(null);
-    return result || 'Task completed on your laptop.';
+    try {
+      const result = await sendTask(
+        {
+          task: userText,
+          context: history.slice(-6).map(m => ({ role: m.role, content: m.content })),
+          confirm_before: ['send', 'pay', 'delete', 'submit', 'post'],
+          session_id: sessionId,
+        },
+        handleEvent,
+        desktopAbort.signal,
+      );
+      setNeedsConfirm(null);
+      return result || 'Task completed on your laptop.';
+    } finally {
+      setNeedsConfirm(null);
+      if (abortDesktop.current === desktopAbort) abortDesktop.current = null;
+      if (desktopSession.current === sessionId) desktopSession.current = null;
+      confirmResolve.current = null;
+    }
   }
 
   function confirmDesktopAction(confirmed: boolean) {
@@ -348,13 +411,17 @@ export function useJarvis() {
     if (question) await reply(question, imageBase64);
     else {
       await stopVoice();
-      await startVoice(); // let user speak after snap
+      await startVoice();
     }
   }
 
   async function disconnect() {
     stopSpeaking();
+    confirmResolve.current?.(false);
+    confirmResolve.current = null;
+    desktopSession.current = null;
     abortDesktop.current?.abort();
+    memoryOrch.current?.stop();
     await stopVoice();
     await MetaDAT.stopSession();
     setMessages([]);
@@ -379,7 +446,7 @@ export function useJarvis() {
     const effectiveText = tc.capturedTranscript;
 
     setIsThinking(true);
-    const decision = await routePrompt(effectiveText, Boolean(tc.imageBase64), lm.current);
+    const decision = await routePrompt(effectiveText, Boolean(tc.imageBase64), lm.current, isCloudConfigured());
 
     const localComplete = async (withImage: boolean): Promise<string> => {
       const result = await lm.current!.complete({
@@ -405,8 +472,13 @@ export function useJarvis() {
           responseText = await localComplete(true);
           break;
         case 'desktop_action':
-          responseText = 'Desktop bridge not yet implemented.';
+          responseText = 'Desktop bridge replay not supported.';
           break;
+        case 'memory_query': {
+          const result = await answerMemoryQuery(lm.current, effectiveText);
+          responseText = result.answer;
+          break;
+        }
         case 'clarify':
           responseText = `Ambiguous: ${decision.reason}`;
           break;

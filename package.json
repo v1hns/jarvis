@@ -7,6 +7,8 @@
     "start": "react-native start",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
+    "test:build": "tsc -p tsconfig.test.json",
+    "test": "npm run test:build && node --test test/*.test.js",
     "postinstall": "patch-package"
   },
   "dependencies": {
