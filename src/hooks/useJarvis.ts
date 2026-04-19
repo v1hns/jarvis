@@ -548,7 +548,7 @@ export function useJarvis() {
   function friendlyConnectError(msg: string): string {
     const lower = msg.toLowerCase();
     if (lower.includes('no eligible') || lower.includes('no device')) {
-      return 'Glasses not found nearby. Power them on, confirm Bluetooth is enabled, open the Meta AI app in the background, then tap Connect again.';
+      return "Glasses aren't registering with Meta AI right now. Open the Meta AI app, make sure your glasses show as the active device there, then come back and tap Connect again.";
     }
     if (lower.includes('bluetooth')) {
       return 'Bluetooth unavailable. Enable Bluetooth on your iPhone, then try Connect again.';
@@ -556,13 +556,46 @@ export function useJarvis() {
     return msg;
   }
 
+  async function waitForDevice(timeoutMs: number = 6000): Promise<boolean> {
+    // Meta DAT streams devices via onDevicesChanged — give it a moment to populate
+    // after Bluetooth wakes up before calling startAutoSession.
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (devices.length > 0) return true;
+      await new Promise(r => setTimeout(r, 250));
+    }
+    return devices.length > 0;
+  }
+
   async function connect() {
     setSetupError(null);
-    try { await MetaDAT.startAutoSession(); }
-    catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.warn('[connect]', msg);
-      setSetupError(friendlyConnectError(msg));
+    // First attempt: immediate — for users whose glasses are already in DAT
+    try {
+      await MetaDAT.startAutoSession();
+      return;
+    } catch (firstErr: unknown) {
+      const firstMsg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+      const noDevice = /no eligible|no device/i.test(firstMsg);
+      if (!noDevice) {
+        console.warn('[connect]', firstMsg);
+        setSetupError(friendlyConnectError(firstMsg));
+        return;
+      }
+      // Glasses not yet discovered — wait up to 6s for DAT to see them
+      setSetupError('Looking for your glasses…');
+      const found = await waitForDevice(6000);
+      if (!found) {
+        setSetupError(friendlyConnectError(firstMsg));
+        return;
+      }
+      try {
+        await MetaDAT.startAutoSession();
+        setSetupError(null);
+      } catch (secondErr: unknown) {
+        const msg = secondErr instanceof Error ? secondErr.message : String(secondErr);
+        console.warn('[connect retry]', msg);
+        setSetupError(friendlyConnectError(msg));
+      }
     }
   }
 

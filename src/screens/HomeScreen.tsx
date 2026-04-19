@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -35,6 +36,7 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
   const [input, setInput] = useState('');
   const [pairingOpen, setPairingOpen] = useState(false);
   const listRef = useRef<FlatList<Message>>(null);
+  const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     // Auto-scroll chat to newest message
@@ -47,6 +49,8 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
     const text = input.trim();
     if (!text) return;
     setInput('');
+    inputRef.current?.clear();
+    Keyboard.dismiss();
     await askText(text);
   }, [input, askText]);
 
@@ -90,12 +94,12 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
   const activeStep = currentPlan?.steps.find(s => s.id === activeStepId);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.flex}
-        keyboardVerticalOffset={0}
-      >
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={styles.container}
+      keyboardVerticalOffset={0}
+    >
+      <SafeAreaView style={styles.flex}>
         {/* ─── Top bar ─────────────────────────────────────────── */}
         <View style={styles.topBar}>
           <View style={styles.brand}>
@@ -298,6 +302,7 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
             <Text style={styles.micIcon}>{isPhoneListening ? '●' : '🎙'}</Text>
           </Pressable>
           <TextInput
+            ref={inputRef}
             style={styles.textInput}
             value={input}
             onChangeText={setInput}
@@ -305,6 +310,7 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
             placeholderTextColor="#4a4a4a"
             onSubmitEditing={send}
             returnKeyType="send"
+            blurOnSubmit
             multiline
             maxLength={2000}
           />
@@ -335,8 +341,8 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
             </Pressable>
           )}
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
