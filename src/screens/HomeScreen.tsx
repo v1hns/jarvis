@@ -178,15 +178,22 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
 
         {/* ─── Glasses connect (when paired + ready) ─────────── */}
         {!pairingNeeded && sessionState === 'stopped' && (
-          <View style={styles.connectRow}>
-            <Pressable style={styles.pillBtn} onPress={connect}>
-              <Text style={styles.pillText}>Connect glasses</Text>
-            </Pressable>
-            {devices.slice(0, 2).map(d => (
-              <Pressable key={d.id} style={styles.pillBtnGhost} onPress={() => connectSpecific(d.id)}>
-                <Text style={styles.pillTextGhost}>{d.name}</Text>
+          <View>
+            <View style={styles.connectRow}>
+              <Pressable style={styles.pillBtn} onPress={connect}>
+                <Text style={styles.pillText}>Connect glasses</Text>
               </Pressable>
-            ))}
+              {devices.slice(0, 2).map(d => (
+                <Pressable key={d.id} style={styles.pillBtnGhost} onPress={() => connectSpecific(d.id)}>
+                  <Text style={styles.pillTextGhost}>{d.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {setupError && (
+              <View style={styles.inlineNote}>
+                <Text style={styles.inlineNoteText}>{setupError}</Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -465,6 +472,8 @@ const styles = StyleSheet.create({
   pillText:    { color: ACCENT, fontSize: 11, fontWeight: '700' },
   pillBtnGhost:{ backgroundColor: BG_SOFT, borderWidth: 1, borderColor: BORDER_HI, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
   pillTextGhost: { color: TEXT_DIM, fontSize: 11 },
+  inlineNote:  { marginHorizontal: 14, marginTop: 4, marginBottom: 8, padding: 10, borderRadius: 8, backgroundColor: '#1f1409', borderWidth: 1, borderColor: '#5a3a1e' },
+  inlineNoteText: { color: '#ffb366', fontSize: 11, lineHeight: 16 },
 
   // Plan card
   planCard:    { marginHorizontal: 14, marginBottom: 8, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#2a3d25', backgroundColor: '#0d140b', gap: 8 },

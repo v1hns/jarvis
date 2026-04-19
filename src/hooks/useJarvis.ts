@@ -545,13 +545,24 @@ export function useJarvis() {
     }
   }
 
+  function friendlyConnectError(msg: string): string {
+    const lower = msg.toLowerCase();
+    if (lower.includes('no eligible') || lower.includes('no device')) {
+      return 'Glasses not found nearby. Power them on, confirm Bluetooth is enabled, open the Meta AI app in the background, then tap Connect again.';
+    }
+    if (lower.includes('bluetooth')) {
+      return 'Bluetooth unavailable. Enable Bluetooth on your iPhone, then try Connect again.';
+    }
+    return msg;
+  }
+
   async function connect() {
     setSetupError(null);
     try { await MetaDAT.startAutoSession(); }
     catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.error('[connect]', msg);
-      setSetupError(msg);
+      console.warn('[connect]', msg);
+      setSetupError(friendlyConnectError(msg));
     }
   }
 
@@ -569,8 +580,13 @@ export function useJarvis() {
   }
 
   async function connectSpecific(deviceId: string) {
+    setSetupError(null);
     try { await MetaDAT.startSession(deviceId); }
-    catch (e) { console.error('[connectSpecific]', e); }
+    catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn('[connectSpecific]', msg);
+      setSetupError(friendlyConnectError(msg));
+    }
   }
 
   async function snapAndAsk(question?: string) {
