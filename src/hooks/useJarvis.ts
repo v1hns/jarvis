@@ -403,7 +403,12 @@ export function useJarvis() {
     setSetupError(null);
     try {
       await MetaDAT.startRegistration();
-      // registrationStateStream will fire 'registered' and set registered=true automatically
+      // Swift resolves on both fresh registration and alreadyRegistered. The
+      // stream may not re-emit in the alreadyRegistered case, so mirror the
+      // state here so Step 2 can render immediately.
+      setRegistered(true);
+      const perm = await MetaDAT.checkPermission();
+      setPermStatus(perm);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error('[register]', msg);

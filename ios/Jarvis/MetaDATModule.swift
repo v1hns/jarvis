@@ -49,7 +49,13 @@ class MetaDATModule: RCTEventEmitter {
     super.invalidate()
   }
 
-  override func startObserving() { hasListeners = true }
+  override func startObserving() {
+    hasListeners = true
+    // JS just attached — re-emit current registration state so Step 1/2 UI
+    // is correct even when the initial emit during configure() raced the listener.
+    let state = Wearables.shared.registrationState
+    sendEvent(withName: "onRegistrationStateChange", body: state.description)
+  }
   override func stopObserving()  { hasListeners = false }
 
   @objc override func addListener(_ eventName: String) { super.addListener(eventName) }
