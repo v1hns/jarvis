@@ -1,14 +1,21 @@
 {
   "name": "jarvis-desktop-relay",
-  "version": "0.1.0",
-  "description": "Laptop-side relay for Jarvis — translates phone tasks into Claude Code CLI invocations",
-  "main": "index.js",
+  "version": "0.2.0",
+  "description": "Laptop-side relay for Jarvis — routes phone tasks through OpenClaw + Gemma 4",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node --watch index.js"
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "setup-agent": "tsx src/setup-agent.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
   },
   "engines": {
     "node": ">=18"
