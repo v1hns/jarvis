@@ -1,16 +1,76 @@
 # Jarvis
 
-An on-device AI assistant for Meta Ray-Ban smart glasses (iOS). Jarvis runs entirely on your iPhone using [Cactus](https://github.com/cactus-compute/cactus) for inference — no cloud required. It connects to your glasses via the [Meta Wearables Device Access Toolkit](https://developers.meta.com/wearables/), listens through the glasses microphone, transcribes speech, and responds.
+Jarvis is a voice-first AI assistant for Meta Ray-Ban smart glasses on iOS. The glasses are the input and output surface, the iPhone is the brain, and the laptop is the execution surface for tasks that require a real desktop. Jarvis uses [Cactus](https://github.com/cactus-compute/cactus) for on-device speech and reasoning, escalates harder requests to cloud models when needed, and can dispatch laptop work through a relay.
 
 ```
-Ray-Ban Glasses (mic + camera)
-        │ Bluetooth
-        ▼
-     iPhone
-  ├── Meta DAT   →  audio & video frames
-  ├── CactusSTT  →  on-device transcription
-  └── CactusLM   →  on-device LLM response
+Ray-Ban Glasses (mic + camera + speakers)
+                │ Bluetooth
+                ▼
+             iPhone
+  ├── Meta DAT          →  glasses connection + camera frames
+  ├── CactusSTT         →  on-device transcription
+  ├── CactusLM / Router →  local answers + routing
+  ├── Cloud models      →  complex reasoning + vision when needed
+  └── Desktop relay     →  laptop actions through Claude Code
 ```
+
+---
+
+## What Jarvis Is Building Toward
+
+The current prototype already connects to the glasses, captures audio, routes requests, and can answer locally or through cloud services. The intended product experience goes further: a hands-free agent that can understand what you say, see what you see, and put your laptop to work while you stay in motion.
+
+## Key Features
+
+- **Fast on-device answers for simple requests.** Jarvis should handle lightweight questions locally on the phone for speed and privacy.
+  Example: `Hey Jarvis, what's the capital of Japan?`
+
+- **Vision on demand instead of constant streaming.** Jarvis only grabs a frame when the prompt actually needs sight, which is better for battery and privacy.
+  Example: `Hey Jarvis, what's on my desk?` or `Hey Jarvis, read this sign.`
+
+- **Cloud escalation for harder reasoning.** When a task is too complex for the small on-device model, Jarvis can hand it off to a larger cloud model and still speak the result back through the glasses.
+  Example: `Hey Jarvis, compare these two go-to-market strategies and tell me which one is riskier.`
+
+- **Desktop delegation for real work.** Jarvis is meant to route laptop tasks to a relay running on your computer so the assistant can draft emails, search files, and use desktop apps while you're away from your desk.
+  Example: `Hey Jarvis, find the email from March about the Harvard acceptance letter and draft a thank-you reply.`
+
+- **Progress updates during long-running tasks.** Instead of going silent, Jarvis should narrate what it's doing while the laptop agent works.
+  Example: `Opening Gmail... searching March mail... drafting the reply... done.`
+
+- **Confirmation before irreversible actions.** Jarvis should pause before sending, deleting, paying, or submitting anything important.
+  Example: `I've drafted the email and I'm ready to send it. Do you want me to continue?`
+
+- **Clarification when intent is ambiguous.** If the router is not confident, Jarvis should ask one short follow-up instead of guessing.
+  Example: `Do you want me to answer that here, or do you want me to do something on your laptop?`
+
+- **Graceful fallback when part of the system is unavailable.** If the laptop is offline or a cloud service is down, Jarvis should keep the rest of the experience usable.
+  Example: `Your laptop isn't reachable right now, but I can still answer that locally.`
+
+## Example Product Moments
+
+1. **Environmental awareness**
+
+   You look at a cluttered table and ask: `Hey Jarvis, what am I looking at?`
+
+   Jarvis captures a frame, identifies the scene, and answers through the glasses without you touching your phone.
+
+2. **Desktop execution**
+
+   You are walking between meetings and say: `Hey Jarvis, draft an update email to Patrick about the hackathon build.`
+
+   Jarvis routes the request to the laptop, speaks progress updates, and comes back with a draft ready for review.
+
+3. **Safe action handling**
+
+   You say: `Hey Jarvis, send that email.`
+
+   Jarvis does not send immediately. It stops, summarizes what it is about to do, and asks for confirmation first.
+
+4. **Local-first assistance**
+
+   You ask: `Hey Jarvis, what's the weathering steel called that forms a protective rust layer?`
+
+   Jarvis can answer quickly on-device when the request is simple enough not to need the cloud or your laptop.
 
 ---
 
