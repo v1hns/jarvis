@@ -1,5 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.TASK_PREAMBLE = void 0;
+exports.buildMessage = buildMessage;
+exports.extractTextFromLine = extractTextFromLine;
 exports.runOpenClawTask = runOpenClawTask;
 const child_process_1 = require("child_process");
 const JARVIS_AGENT_ID = 'jarvis';
@@ -19,12 +22,13 @@ IMPORTANT RULES:
 3. Keep all output concise — responses are spoken aloud.
 
 `;
+exports.TASK_PREAMBLE = TASK_PREAMBLE;
 /**
  * Build the full message string sent to openclaw agent.
  * Prepends the preamble and any conversation context.
  */
 function buildMessage(payload) {
-    const preamble = TASK_PREAMBLE(payload.confirm_before ?? ['send', 'pay', 'delete', 'submit', 'post']);
+    const preamble = (0, exports.TASK_PREAMBLE)(payload.confirm_before ?? ['send', 'pay', 'delete', 'submit', 'post']);
     const contextLines = (payload.context ?? [])
         .map(m => `${m.role === 'user' ? 'User' : 'Jarvis'}: ${m.content}`)
         .join('\n\n');
@@ -60,11 +64,12 @@ function extractTextFromLine(line) {
  * translate its stdout into BridgeEvents streamed to the onEvent callback.
  * Returns a handle with child process ref and a confirmation injector.
  */
-function runOpenClawTask(payload, onEvent, geminiApiKey) {
+function runOpenClawTask(payload, onEvent, geminiApiKey, deps = {}) {
+    const { spawnImpl = child_process_1.spawn, setIntervalImpl = setInterval, clearIntervalImpl = clearInterval, logger = console, } = deps;
     const message = buildMessage(payload);
     const sessionId = payload.session_id ?? `jarvis-${Date.now()}`;
-    console.log(`[relay] [${sessionId}] task: ${payload.task.slice(0, 120)}`);
-    const child = (0, child_process_1.spawn)('openclaw', [
+    logger.log(`[relay] [${sessionId}] task: ${payload.task.slice(0, 120)}`);
+    const child = spawnImpl('openclaw', [
         'agent',
         '--agent', JARVIS_AGENT_ID,
         '--local',
@@ -85,7 +90,7 @@ function runOpenClawTask(payload, onEvent, geminiApiKey) {
     let heartbeat = null;
     // Keep SSE alive with progress ticks during long-running tasks
     let lastProgressMs = Date.now();
-    heartbeat = setInterval(() => {
+    heartbeat = setIntervalImpl(() => {
         if (Date.now() - lastProgressMs > 8_000) {
             onEvent({ type: 'progress', payload: 'Working…' });
         }
@@ -107,13 +112,13 @@ function runOpenClawTask(payload, onEvent, geminiApiKey) {
                     const msg = t.slice('PROGRESS:'.length).trim();
                     lastProgressMs = Date.now();
                     onEvent({ type: 'progress', payload: msg });
-                    console.log(`[relay] [${sessionId}] progress: ${msg}`);
+                    logger.log(`[relay] [${sessionId}] progress: ${msg}`);
                 }
                 else if (t.startsWith('CONFIRM_REQUIRED:')) {
                     const msg = t.slice('CONFIRM_REQUIRED:'.length).trim();
                     lastProgressMs = Date.now();
                     onEvent({ type: 'needs_confirmation', payload: msg });
-                    console.log(`[relay] [${sessionId}] confirmation needed: ${msg}`);
+                    logger.log(`[relay] [${sessionId}] confirmation needed: ${msg}`);
                 }
                 else {
                     // General output — treat as progress for live audio feedback
@@ -127,22 +132,22 @@ function runOpenClawTask(payload, onEvent, geminiApiKey) {
     child.stderr.on('data', (chunk) => {
         const msg = chunk.toString().trim();
         if (msg)
-            console.error(`[relay] [${sessionId}] stderr:`, msg);
+            logger.error(`[relay] [${sessionId}] stderr:`, msg);
     });
     child.on('close', (code) => {
         if (heartbeat)
-            clearInterval(heartbeat);
+            clearIntervalImpl(heartbeat);
         if (code !== 0) {
             onEvent({ type: 'error', payload: `OpenClaw exited with code ${code}` });
         }
         else {
             onEvent({ type: 'result', payload: finalResult || 'Task completed.' });
         }
-        console.log(`[relay] [${sessionId}] done (exit ${code})`);
+        logger.log(`[relay] [${sessionId}] done (exit ${code})`);
     });
     child.on('error', (err) => {
         if (heartbeat)
-            clearInterval(heartbeat);
+            clearIntervalImpl(heartbeat);
         const msg = err.code === 'ENOENT'
             ? 'openclaw CLI not found — run: npm install -g openclaw  OR  check your PATH'
             : err.message;
