@@ -8,9 +8,14 @@
 
 /* Begin PBXBuildFile section */
 		00E356F31AD99517003FC87E /* JarvisTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 00E356F21AD99517003FC87E /* JarvisTests.m */; };
+		093B96C82F9483BB00970F14 /* MetaDATModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 093B96B92F9483BB00970F14 /* MetaDATModule.swift */; };
+		093B96C92F9483BB00970F14 /* MetaDATModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 093B96B82F9483BB00970F14 /* MetaDATModule.m */; };
+		093B96E22F9483BB00970F14 /* MWDATCore in Frameworks */ = {isa = PBXBuildFile; productRef = 093B96E02F9483BB00970F14 /* MWDATCore */; };
+		093B96E32F9483BB00970F14 /* MWDATCamera in Frameworks */ = {isa = PBXBuildFile; productRef = 093B96E12F9483BB00970F14 /* MWDATCamera */; };
 		0C80B921A6F3F58F76C31292 /* libPods-Jarvis.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-Jarvis.a */; };
 		13B07FBC1A68108700A75B9A /* AppDelegate.mm in Sources */ = {isa = PBXBuildFile; fileRef = 13B07FB01A68108700A75B9A /* AppDelegate.mm */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		AAA000001A68108700A75B9A /* main.jsbundle in Resources */ = {isa = PBXBuildFile; fileRef = AAA000011A68108700A75B9A /* main.jsbundle */; };
 		13B07FC11A68108700A75B9A /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 13B07FB71A68108700A75B9A /* main.m */; };
 		7699B88040F8A987B510C191 /* libPods-Jarvis-JarvisTests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 19F6CBCC0A4E27FBF8BF4A61 /* libPods-Jarvis-JarvisTests.a */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
@@ -31,6 +36,18 @@
 		00E356EE1AD99517003FC87E /* JarvisTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JarvisTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		00E356F11AD99517003FC87E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		00E356F21AD99517003FC87E /* JarvisTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JarvisTests.m; sourceTree = "<group>"; };
+		093B96B22F9483BB00970F14 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
+		093B96B32F9483BB00970F14 /* AppDelegate.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = AppDelegate.mm; sourceTree = "<group>"; };
+		093B96B42F9483BB00970F14 /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
+		093B96B52F9483BB00970F14 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		093B96B62F9483BB00970F14 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		093B96B72F9483BB00970F14 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		093B96B82F9483BB00970F14 /* MetaDATModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MetaDATModule.m; sourceTree = "<group>"; };
+		093B96B92F9483BB00970F14 /* MetaDATModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetaDATModule.swift; sourceTree = "<group>"; };
+		093B96BA2F9483BB00970F14 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		093B96BB2F9483BB00970F14 /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
+		093B96BC2F9483BB00970F14 /* Secrets.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text; path = Secrets.xcconfig.example; sourceTree = "<group>"; };
+		093B96DD2F9483BB00970F14 /* Jarvis-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Jarvis-Bridging-Header.h"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* Jarvis.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jarvis.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FAF1A68108700A75B9A /* AppDelegate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = AppDelegate.h; path = Jarvis/AppDelegate.h; sourceTree = "<group>"; };
 		13B07FB01A68108700A75B9A /* AppDelegate.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = AppDelegate.mm; path = Jarvis/AppDelegate.mm; sourceTree = "<group>"; };
@@ -38,6 +55,7 @@
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Jarvis/Info.plist; sourceTree = "<group>"; };
 		13B07FB71A68108700A75B9A /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = main.m; path = Jarvis/main.m; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = Jarvis/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		AAA000011A68108700A75B9A /* main.jsbundle */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = main.jsbundle; path = main.jsbundle; sourceTree = "SOURCE_ROOT"; };
 		19F6CBCC0A4E27FBF8BF4A61 /* libPods-Jarvis-JarvisTests.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Jarvis-JarvisTests.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B4392A12AC88292D35C810B /* Pods-Jarvis.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Jarvis.debug.xcconfig"; path = "Target Support Files/Pods-Jarvis/Pods-Jarvis.debug.xcconfig"; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-Jarvis.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Jarvis.release.xcconfig"; path = "Target Support Files/Pods-Jarvis/Pods-Jarvis.release.xcconfig"; sourceTree = "<group>"; };
@@ -62,6 +80,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				0C80B921A6F3F58F76C31292 /* libPods-Jarvis.a in Frameworks */,
+				093B96E22F9483BB00970F14 /* MWDATCore in Frameworks */,
+				093B96E32F9483BB00970F14 /* MWDATCamera in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -83,6 +103,25 @@
 				00E356F11AD99517003FC87E /* Info.plist */,
 			);
 			name = "Supporting Files";
+			sourceTree = "<group>";
+		};
+		093B96BD2F9483BB00970F14 /* Jarvis */ = {
+			isa = PBXGroup;
+			children = (
+				093B96B22F9483BB00970F14 /* AppDelegate.h */,
+				093B96B32F9483BB00970F14 /* AppDelegate.mm */,
+				093B96B42F9483BB00970F14 /* Images.xcassets */,
+				093B96B52F9483BB00970F14 /* Info.plist */,
+				093B96DD2F9483BB00970F14 /* Jarvis-Bridging-Header.h */,
+				093B96B62F9483BB00970F14 /* LaunchScreen.storyboard */,
+				093B96B72F9483BB00970F14 /* main.m */,
+				093B96B82F9483BB00970F14 /* MetaDATModule.m */,
+				093B96B92F9483BB00970F14 /* MetaDATModule.swift */,
+				093B96BA2F9483BB00970F14 /* PrivacyInfo.xcprivacy */,
+				093B96BB2F9483BB00970F14 /* Secrets.xcconfig */,
+				093B96BC2F9483BB00970F14 /* Secrets.xcconfig.example */,
+			);
+			path = Jarvis;
 			sourceTree = "<group>";
 		};
 		13B07FAE1A68108700A75B9A /* Jarvis */ = {
@@ -119,6 +158,7 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
+				093B96BD2F9483BB00970F14 /* Jarvis */,
 				13B07FAE1A68108700A75B9A /* Jarvis */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				00E356EF1AD99517003FC87E /* JarvisTests */,
@@ -192,6 +232,10 @@
 			dependencies = (
 			);
 			name = Jarvis;
+			packageProductDependencies = (
+				093B96E02F9483BB00970F14 /* MWDATCore */,
+				093B96E12F9483BB00970F14 /* MWDATCamera */,
+			);
 			productName = Jarvis;
 			productReference = 13B07F961A680F5B00A75B9A /* Jarvis.app */;
 			productType = "com.apple.product-type.application";
@@ -222,6 +266,9 @@
 				Base,
 			);
 			mainGroup = 83CBB9F61A601CBA00E9B192;
+			packageReferences = (
+				093B96B12F94807200970F14 /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */,
+			);
 			productRefGroup = 83CBBA001A601CBA00E9B192 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -247,6 +294,7 @@
 				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				F12C669C0B81F425359F8817 /* PrivacyInfo.xcprivacy in Resources */,
+				AAA000001A68108700A75B9A /* main.jsbundle in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -277,13 +325,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Jarvis/Pods-Jarvis-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Jarvis/Pods-Jarvis-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -342,13 +386,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Jarvis-JarvisTests/Pods-Jarvis-JarvisTests-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Jarvis-JarvisTests/Pods-Jarvis-JarvisTests-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -363,13 +403,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Jarvis/Pods-Jarvis-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Jarvis/Pods-Jarvis-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -384,13 +420,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Jarvis-JarvisTests/Pods-Jarvis-JarvisTests-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Jarvis-JarvisTests/Pods-Jarvis-JarvisTests-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -414,6 +446,8 @@
 			files = (
 				13B07FBC1A68108700A75B9A /* AppDelegate.mm in Sources */,
 				13B07FC11A68108700A75B9A /* main.m in Sources */,
+				093B96C82F9483BB00970F14 /* MetaDATModule.swift in Sources */,
+				093B96C92F9483BB00970F14 /* MetaDATModule.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -449,7 +483,7 @@
 					"-lc++",
 					"$(inherited)",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.vihaanshringi.jarvis";
+				PRODUCT_BUNDLE_IDENTIFIER = com.vihaanshringi.jarvis;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Jarvis.app/Jarvis";
 			};
@@ -473,7 +507,7 @@
 					"-lc++",
 					"$(inherited)",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.vihaanshringi.jarvis";
+				PRODUCT_BUNDLE_IDENTIFIER = com.vihaanshringi.jarvis;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Jarvis.app/Jarvis";
 			};
@@ -500,9 +534,11 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.vihaanshringi.jarvis";
+				PRODUCT_BUNDLE_IDENTIFIER = com.vihaanshringi.jarvis;
 				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.vihaanshringi.jarvis;
 				PRODUCT_NAME = Jarvis;
+				SKIP_BUNDLING = 1;
+				SWIFT_OBJC_BRIDGING_HEADER = "Jarvis/Jarvis-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -529,9 +565,10 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.vihaanshringi.jarvis";
+				PRODUCT_BUNDLE_IDENTIFIER = com.vihaanshringi.jarvis;
 				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.vihaanshringi.jarvis;
 				PRODUCT_NAME = Jarvis;
+				SWIFT_OBJC_BRIDGING_HEADER = "Jarvis/Jarvis-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
@@ -606,7 +643,10 @@
 					"-DFOLLY_CFG_NO_COROUTINES=1",
 					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
 				);
-				OTHER_LDFLAGS = "$(inherited)  ";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					" ",
+				);
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
@@ -675,7 +715,10 @@
 					"-DFOLLY_CFG_NO_COROUTINES=1",
 					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
 				);
-				OTHER_LDFLAGS = "$(inherited)  ";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					" ",
+				);
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				USE_HERMES = true;
@@ -714,6 +757,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		093B96B12F94807200970F14 /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/facebook/meta-wearables-dat-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		093B96E02F9483BB00970F14 /* MWDATCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 093B96B12F94807200970F14 /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */;
+			productName = MWDATCore;
+		};
+		093B96E12F9483BB00970F14 /* MWDATCamera */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 093B96B12F94807200970F14 /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */;
+			productName = MWDATCamera;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 83CBB9F71A601CBA00E9B192 /* Project object */;
 }

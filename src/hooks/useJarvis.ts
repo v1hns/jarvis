@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { CactusLM, CactusSTT } from 'cactus-react-native';
+import { useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
+import { CactusLM } from 'cactus-react-native';
+import RNFS from 'react-native-fs';
+import Voice, { SpeechResultsEvent, SpeechErrorEvent } from '@react-native-voice/voice';
 import { MetaDAT, addDATListener, SessionState, DeviceInfo } from '../modules/MetaDAT';
 import { route as routePrompt, Route } from '../modules/Router';
 import { cloudComplete, cloudModelName } from '../modules/GemmaCloud';
@@ -29,8 +32,7 @@ export interface Message {
 }
 
 export function useJarvis() {
-  const lm  = useRef<CactusLM | null>(null);
-  const stt = useRef<CactusSTT | null>(null);
+  const lm = useRef<CactusLM | null>(null);
 
   const [sessionState, setSessionState]       = useState<SessionState>('stopped');
   const [devices, setDevices]                 = useState<DeviceInfo[]>([]);
@@ -46,14 +48,17 @@ export function useJarvis() {
   const [isRecording, setIsRecording]         = useState(false);
   const [testCases, setTestCases]             = useState<TestCase[]>([]);
 
-  const audioBuffer     = useRef<number[]>([]);
-  const silenceTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const voiceActive     = useRef(false);
   const abortDesktop    = useRef<AbortController | null>(null);
   const confirmResolve  = useRef<((ans: boolean) => void) | null>(null);
   const isRecordingRef  = useRef(false);
   const lastRouteRef    = useRef<Route>('local_answer');
   const lastResponseRef = useRef<string>('');
   const latestFrameRef  = useRef<string | null>(null);
+  const messagesRef     = useRef<Message[]>([]);
+
+  // Keep messagesRef in sync so async handlers always see latest messages
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   // ─── Boot SDK + AI models ─────────────────────────────────────────────────
 
@@ -63,17 +68,77 @@ export function useJarvis() {
       const perm = await MetaDAT.checkPermission();
       setPermStatus(perm);
 
-      lm.current  = new CactusLM({ options: { quantization: 'int4' } });
-      stt.current = new CactusSTT({ options: { quantization: 'int4' } });
-      await Promise.all([lm.current.download(), stt.current.download()]);
-      await Promise.all([lm.current.init(),     stt.current.init()]);
+      const modelPath = `${RNFS.DocumentDirectoryPath}/qwen2.5-0.5b-q4.gguf`;
+      const modelUrl = 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf';
+
+      const exists = await RNFS.exists(modelPath);
+      if (!exists) {
+        console.log('[CactusLM] Downloading model...');
+        await RNFS.downloadFile({ fromUrl: modelUrl, toFile: modelPath }).promise;
+        console.log('[CactusLM] Model downloaded');
+      }
+
+      const { lm: model, error } = await CactusLM.init({ model: modelPath });
+      if (error || !model) {
+        console.error('[CactusLM] init failed', error);
+        return;
+      }
+      lm.current = model;
       setModelsReady(true);
     }
     init().catch(console.error);
     loadCases().then(setTestCases).catch(console.error);
   }, []);
 
-  // ─── Laptop heartbeat — probe every 30s while bridge is configured ────────
+  // Re-check permission when app returns to foreground (e.g. after Meta AI redirect)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        MetaDAT.checkPermission().then(setPermStatus).catch(() => {});
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // ─── Voice (Speech Recognition) setup ───────────────────────────────────
+
+  useEffect(() => {
+    Voice.onSpeechResults = (e: SpeechResultsEvent) => {
+      const text = e.value?.[0]?.trim();
+      if (!text) return;
+      setTranscript(text);
+      stopVoice();
+      replyFromText(text);
+    };
+
+    Voice.onSpeechError = (e: SpeechErrorEvent) => {
+      // Restart listening unless we're shutting down
+      if (voiceActive.current) startVoice();
+    };
+
+    return () => {
+      Voice.destroy().then(Voice.removeAllListeners);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelsReady]);
+
+  async function startVoice() {
+    try {
+      await Voice.start('en-US');
+      voiceActive.current = true;
+    } catch (e) {
+      console.error('[Voice] start failed', e);
+    }
+  }
+
+  async function stopVoice() {
+    try {
+      voiceActive.current = false;
+      await Voice.stop();
+    } catch {}
+  }
+
+  // ─── Laptop heartbeat ────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!isBridgeConfigured()) return;
@@ -93,23 +158,19 @@ export function useJarvis() {
 
   useEffect(() => {
     const subs = [
-      addDATListener('onSessionStateChange', setSessionState),
+      addDATListener('onSessionStateChange', (state: SessionState) => {
+        setSessionState(state);
+        if (state === 'streaming') startVoice();
+        if (state === 'stopped' || state === 'stopping') stopVoice();
+      }),
+
       addDATListener('onDevicesChanged', setDevices),
 
-      addDATListener('onVideoFrame', ({ data }) => {
+      addDATListener('onVideoFrame', ({ data }: { data: string }) => {
         latestFrameRef.current = data;
       }),
 
-      addDATListener('onAudioChunk', ({ samples }) => {
-        audioBuffer.current.push(...samples);
-        if (silenceTimer.current) clearTimeout(silenceTimer.current);
-        silenceTimer.current = setTimeout(() => {
-          const audio = audioBuffer.current.splice(0);
-          if (audio.length > 0) transcribeAndReply(audio);
-        }, 1500);
-      }),
-
-      addDATListener('onError', ({ message }) => {
+      addDATListener('onError', ({ message }: { message: string }) => {
         console.error('[MetaDAT]', message);
       }),
     ];
@@ -119,28 +180,26 @@ export function useJarvis() {
 
   // ─── Core logic ─────────────────────────────────────────────────────────
 
-  async function transcribeAndReply(audio: number[], imageBase64?: string) {
-    if (!stt.current || !lm.current || !modelsReady) return;
+  async function replyFromText(text: string, imageBase64?: string) {
     const shouldCapture = isRecordingRef.current;
-    const { text } = await stt.current.transcribe({ audio });
-    if (!text.trim()) return;
-    setTranscript(text);
     await reply(text, imageBase64);
     if (shouldCapture) {
       isRecordingRef.current = false;
       setIsRecording(false);
       const capturedImage = imageBase64 ?? latestFrameRef.current ?? undefined;
-      const tc = buildCase(audio, text, lastRouteRef.current, lastResponseRef.current, capturedImage);
+      const tc = buildCase([], text, lastRouteRef.current, lastResponseRef.current, capturedImage);
       await saveCase(tc);
       setTestCases(await loadCases());
     }
+    // Restart listening after reply
+    if (voiceActive.current || sessionState === 'streaming') startVoice();
   }
 
   async function reply(userText: string, imageBase64?: string) {
     if (!lm.current) return;
 
     const userMsg: Message = { role: 'user', content: userText, imageBase64 };
-    const nextMessages = [...messages, userMsg];
+    const nextMessages = [...messagesRef.current, userMsg];
     setMessages(nextMessages);
     setIsThinking(true);
 
@@ -208,10 +267,9 @@ export function useJarvis() {
     } catch (err: unknown) {
       const errText = err instanceof Error ? err.message : String(err);
       console.error(`[${decision.route}]`, errText);
-      const errMsg = `(${decision.route} failed: ${errText})`;
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: errMsg,
+        content: `(${decision.route} failed: ${errText})`,
         source: decision.route === 'cloud_answer' ? 'cloud' : 'local',
       }]);
       await speak('Something went wrong. ' + errText.slice(0, 80));
@@ -240,17 +298,12 @@ export function useJarvis() {
           setDesktopProgress(event.payload);
           await speak(event.payload);
           break;
-
         case 'needs_confirmation': {
           setNeedsConfirm(event.payload);
           await speak(`I need your confirmation before continuing. ${event.payload} Say yes to confirm or no to cancel.`);
-          // Wait for voice confirmation (resolved by confirmDesktopAction)
-          await new Promise<boolean>(resolve => {
-            confirmResolve.current = resolve;
-          });
+          await new Promise<boolean>(resolve => { confirmResolve.current = resolve; });
           break;
         }
-
         case 'error':
           console.error('[Bridge]', event.payload);
           break;
@@ -271,7 +324,6 @@ export function useJarvis() {
     return result || 'Task completed on your laptop.';
   }
 
-  // Called by HomeScreen when user voice-confirms or cancels a desktop action
   function confirmDesktopAction(confirmed: boolean) {
     setNeedsConfirm(null);
     confirmResolve.current?.(confirmed);
@@ -280,32 +332,30 @@ export function useJarvis() {
 
   // ─── Public controls ─────────────────────────────────────────────────────
 
-  async function register() {
-    await MetaDAT.startRegistration();
-  }
+  async function register() { await MetaDAT.startRegistration(); }
 
   async function grantPermission() {
     const status = await MetaDAT.requestPermission();
     setPermStatus(status);
   }
 
-  async function connect() {
-    await MetaDAT.startAutoSession();
-  }
+  async function connect() { await MetaDAT.startAutoSession(); }
 
-  async function connectSpecific(deviceId: string) {
-    await MetaDAT.startSession(deviceId);
-  }
+  async function connectSpecific(deviceId: string) { await MetaDAT.startSession(deviceId); }
 
   async function snapAndAsk(question?: string) {
     const imageBase64 = await MetaDAT.capturePhoto();
     if (question) await reply(question, imageBase64);
-    else await transcribeAndReply([], imageBase64);
+    else {
+      await stopVoice();
+      await startVoice(); // let user speak after snap
+    }
   }
 
   async function disconnect() {
     stopSpeaking();
     abortDesktop.current?.abort();
+    await stopVoice();
     await MetaDAT.stopSession();
     setMessages([]);
     setDesktopProgress('');
@@ -325,11 +375,8 @@ export function useJarvis() {
   }
 
   async function replayCase(tc: TestCase): Promise<ReplayResult> {
-    if (!stt.current || !lm.current || !modelsReady) {
-      throw new Error('Models not ready');
-    }
-    const { text } = await stt.current.transcribe({ audio: tc.audioSamples });
-    const effectiveText = text.trim() || tc.capturedTranscript;
+    if (!lm.current || !modelsReady) throw new Error('Models not ready');
+    const effectiveText = tc.capturedTranscript;
 
     setIsThinking(true);
     const decision = await routePrompt(effectiveText, Boolean(tc.imageBase64), lm.current);

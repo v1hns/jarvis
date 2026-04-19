@@ -1,17 +1,27 @@
 import Foundation
-import Combine
 import AVFoundation
-import MWDATCore   // Wearables, PermissionStatus, RegistrationState
-import MWDATCamera // StreamSession, StreamSessionState, StreamSessionConfig,
-                   // AutoDeviceSelector, SpecificDeviceSelector
+import MWDATCore
+import MWDATCamera
+
+// Called from AppDelegate before JS starts, so handleUrl works even on cold launch
+@objc class WearablesURLHandler: NSObject {
+  @objc static func configureEarly() {
+    try? Wearables.configure()
+  }
+  @objc static func handle(_ url: URL) {
+    Task { try? await Wearables.shared.handleUrl(url) }
+  }
+}
 
 @objc(MetaDATModule)
 class MetaDATModule: RCTEventEmitter {
 
-  private var session: StreamSession?
-  private var cancellables = Set<AnyCancellable>()
+  private var deviceSession: DeviceSession?
+  private var streamSession: StreamSession?
+  private var listenerTokens: [any AnyListenerToken] = []
   private var audioEngine: AVAudioEngine?
   private var hasListeners = false
+  private var devicesTask: Task<Void, Never>?
 
   // MARK: - RCTEventEmitter
 
@@ -21,8 +31,25 @@ class MetaDATModule: RCTEventEmitter {
     ["onSessionStateChange", "onVideoFrame", "onAudioChunk", "onError", "onDevicesChanged"]
   }
 
+  override func invalidate() {
+    devicesTask?.cancel()
+    devicesTask = nil
+    Task {
+      for token in listenerTokens { await token.cancel() }
+      listenerTokens.removeAll()
+      if let s = streamSession { await s.stop() }
+      streamSession = nil
+      deviceSession = nil
+    }
+    stopAudioEngine()
+    super.invalidate()
+  }
+
   override func startObserving() { hasListeners = true }
   override func stopObserving()  { hasListeners = false }
+
+  @objc override func addListener(_ eventName: String) { super.addListener(eventName) }
+  @objc override func removeListeners(_ count: Double) { super.removeListeners(count) }
 
   private func emit(_ name: String, body: Any?) {
     guard hasListeners else { return }
@@ -31,104 +58,154 @@ class MetaDATModule: RCTEventEmitter {
 
   // MARK: - SDK setup
 
-  /// Call once at launch — reads MWDAT dict from Info.plist.
   @objc func configure(_ resolve: @escaping RCTPromiseResolveBlock,
                         rejecter reject: @escaping RCTPromiseRejectBlock) {
-    Wearables.configure()
+    do {
+      try Wearables.configure()
+    } catch WearablesError.alreadyConfigured {
+      // fine — called twice due to React StrictMode
+    } catch {
+      reject("CONFIGURE_ERROR", error.localizedDescription, error)
+      return
+    }
 
-    Wearables.shared.devicesStream()
-      .sink { [weak self] devices in
-        let arr = devices.map { d -> [String: Any] in
-          ["id": d.identifier, "name": d.displayName, "model": d.modelIdentifier]
+    devicesTask = Task { [weak self] in
+      for await deviceIds in Wearables.shared.devicesStream() {
+        guard !Task.isCancelled else { break }
+        let arr = deviceIds.map { id -> [String: Any] in
+          let device = Wearables.shared.deviceForIdentifier(id)
+          return [
+            "id": id,
+            "name": device?.name ?? id,
+            "model": device?.deviceType().rawValue ?? "unknown",
+          ]
         }
         self?.emit("onDevicesChanged", body: arr)
       }
-      .store(in: &cancellables)
+    }
 
     resolve(nil)
   }
 
-  /// Opens Meta AI app pairing flow. User approves once.
+  // MARK: - Registration
+
   @objc func startRegistration(_ resolve: @escaping RCTPromiseResolveBlock,
                                 rejecter reject: @escaping RCTPromiseRejectBlock) {
-    Wearables.shared.registrationStateStream()
-      .first()
-      .sink { state in resolve(state.rawValue) }
-      .store(in: &cancellables)
-
-    Wearables.shared.startRegistration()
+    Task {
+      do {
+        try await Wearables.shared.startRegistration()
+        resolve("registered")
+      } catch {
+        reject("REGISTRATION_ERROR", error.localizedDescription, error)
+      }
+    }
   }
 
   // MARK: - Permissions
 
   @objc func checkPermission(_ resolve: @escaping RCTPromiseResolveBlock,
                               rejecter reject: @escaping RCTPromiseRejectBlock) {
-    let status = Wearables.shared.checkPermissionStatus(.camera)
-    resolve(status == .granted ? "granted" : "denied")
+    Task {
+      do {
+        let status = try await Wearables.shared.checkPermissionStatus(.camera)
+        resolve(status == .granted ? "granted" : "denied")
+      } catch {
+        resolve("denied")
+      }
+    }
   }
 
-  /// Deep-links to Meta AI app for user to grant camera permission.
   @objc func requestPermission(_ resolve: @escaping RCTPromiseResolveBlock,
                                 rejecter reject: @escaping RCTPromiseRejectBlock) {
     Task {
-      let status = await Wearables.shared.requestPermission(.camera)
-      resolve(status == .granted ? "granted" : "denied")
+      do {
+        let status = try await Wearables.shared.requestPermission(.camera)
+        resolve(status == .granted ? "granted" : "denied")
+      } catch {
+        reject("PERMISSION_ERROR", error.localizedDescription, error)
+      }
     }
   }
 
   // MARK: - Session
 
-  /// SDK auto-selects the paired glasses (preferred).
   @objc func startAutoSession(_ resolve: @escaping RCTPromiseResolveBlock,
                                rejecter reject: @escaping RCTPromiseRejectBlock) {
-    let s = StreamSession(streamSessionConfig: StreamSessionConfig(),
-                          deviceSelector: AutoDeviceSelector())
-    attachPublishers(to: s)
-    session = s
-    s.start()
-    resolve(nil)
+    Task {
+      do {
+        let selector = AutoDeviceSelector(wearables: Wearables.shared)
+        let dSession = try Wearables.shared.createSession(deviceSelector: selector)
+        try dSession.start()
+        guard let sSession = try dSession.addStream() else {
+          reject("SESSION_ERROR", "Failed to create stream session", nil)
+          return
+        }
+        self.deviceSession = dSession
+        self.streamSession = sSession
+        self.attachListeners(to: sSession)
+        await sSession.start()
+        resolve(nil)
+      } catch {
+        reject("SESSION_ERROR", error.localizedDescription, error)
+      }
+    }
   }
 
-  /// Connect to a specific device by identifier.
   @objc func startSession(_ deviceId: String,
                            resolver resolve: @escaping RCTPromiseResolveBlock,
                            rejecter reject: @escaping RCTPromiseRejectBlock) {
-    guard let device = Wearables.shared.devicesStream().value?.first(where: { $0.identifier == deviceId }) else {
-      reject("DEVICE_NOT_FOUND", "No device with id \(deviceId)", nil)
-      return
+    Task {
+      do {
+        let selector = SpecificDeviceSelector(device: deviceId)
+        let dSession = try Wearables.shared.createSession(deviceSelector: selector)
+        try dSession.start()
+        guard let sSession = try dSession.addStream() else {
+          reject("SESSION_ERROR", "Failed to create stream session", nil)
+          return
+        }
+        self.deviceSession = dSession
+        self.streamSession = sSession
+        self.attachListeners(to: sSession)
+        await sSession.start()
+        resolve(nil)
+      } catch {
+        reject("SESSION_ERROR", error.localizedDescription, error)
+      }
     }
-    let s = StreamSession(streamSessionConfig: StreamSessionConfig(),
-                          deviceSelector: SpecificDeviceSelector(device: device))
-    attachPublishers(to: s)
-    session = s
-    s.start()
-    resolve(nil)
   }
 
   @objc func stopSession(_ resolve: @escaping RCTPromiseResolveBlock,
                           rejecter reject: @escaping RCTPromiseRejectBlock) {
-    session?.stop()
-    session = nil
-    stopAudioEngine()
-    resolve(nil)
+    Task {
+      for token in listenerTokens { await token.cancel() }
+      listenerTokens.removeAll()
+      if let s = streamSession { await s.stop() }
+      streamSession = nil
+      deviceSession = nil
+      stopAudioEngine()
+      resolve(nil)
+    }
   }
 
   // MARK: - Photo
 
   @objc func capturePhoto(_ resolve: @escaping RCTPromiseResolveBlock,
                            rejecter reject: @escaping RCTPromiseRejectBlock) {
-    guard let session else {
+    guard let session = streamSession else {
       reject("NO_SESSION", "Call startAutoSession() first", nil)
       return
     }
-    session.photoDataPublisher
-      .first()
-      .sink { data in resolve(data.base64EncodedString()) }
-      .store(in: &cancellables)
-    session.capturePhoto(format: .jpeg)
+    let token = session.photoDataPublisher.listen { [weak self] photoData in
+      resolve(photoData.data.base64EncodedString())
+      Task { [weak self] in
+        if let t = self?.listenerTokens.last { await t.cancel() }
+      }
+    }
+    listenerTokens.append(token)
+    _ = session.capturePhoto(format: .jpeg)
   }
 
-  // MARK: - Audio (Bluetooth HFP — standard iOS AVAudio, not a DAT API)
+  // MARK: - Audio (Bluetooth HFP via AVAudioEngine)
 
   @objc func startAudio(_ resolve: @escaping RCTPromiseResolveBlock,
                          rejecter reject: @escaping RCTPromiseRejectBlock) {
@@ -165,42 +242,45 @@ class MetaDATModule: RCTEventEmitter {
     audioEngine = nil
   }
 
-  private func attachPublishers(to s: StreamSession) {
-    s.statePublisher
-      .sink { [weak self] state in
-        self?.emit("onSessionStateChange", body: state.rawValue)
-        switch state {
-        case .streaming:
-          self?.startAudio({ _ in }, rejecter: { code, msg, _ in
-            print("[Jarvis Audio] \(code ?? ""): \(msg ?? "")")
-          })
-        case .stopped, .stopping:
-          self?.stopAudioEngine()
-        default: break
-        }
+  private func attachListeners(to s: StreamSession) {
+    let stateToken = s.statePublisher.listen { [weak self] state in
+      let stateStr: String
+      switch state {
+      case .stopped:          stateStr = "stopped"
+      case .stopping:         stateStr = "stopping"
+      case .waitingForDevice: stateStr = "waitingForDevice"
+      case .starting:         stateStr = "starting"
+      case .streaming:        stateStr = "streaming"
+      case .paused:           stateStr = "paused"
       }
-      .store(in: &cancellables)
+      self?.emit("onSessionStateChange", body: stateStr)
+      if state == .stopped || state == .stopping {
+        self?.stopAudioEngine()
+      }
+    }
 
-    s.videoFramePublisher
-      .sink { [weak self] frame in
-        guard let jpg = frame.jpegData else { return }
+    let videoToken = s.videoFramePublisher.listen { [weak self] frame in
+      if let jpg = frame.makeUIImage()?.jpegData(compressionQuality: 0.7) {
+        let size = frame.sampleBuffer.imageBuffer.map {
+          (CVPixelBufferGetWidth($0), CVPixelBufferGetHeight($0))
+        } ?? (0, 0)
         self?.emit("onVideoFrame", body: [
-          "width": frame.width,
-          "height": frame.height,
+          "width": size.0,
+          "height": size.1,
           "data": jpg.base64EncodedString(),
-          "timestampMs": frame.timestamp * 1000,
+          "timestampMs": Int64(CMSampleBufferGetPresentationTimeStamp(frame.sampleBuffer).seconds * 1000),
         ])
       }
-      .store(in: &cancellables)
+    }
 
-    s.errorPublisher
-      .sink { [weak self] error in
-        self?.emit("onError", body: ["code": "STREAM_ERROR", "message": error.localizedDescription])
-      }
-      .store(in: &cancellables)
+    let errorToken = s.errorPublisher.listen { [weak self] error in
+      self?.emit("onError", body: ["code": "STREAM_ERROR", "message": error.localizedDescription])
+    }
+
+    listenerTokens.append(contentsOf: [stateToken, videoToken, errorToken])
   }
 
-  // MARK: - Test Harness (file-backed storage in app Documents)
+  // MARK: - Test Harness
 
   private var testHarnessURL: URL {
     FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -231,7 +311,4 @@ class MetaDATModule: RCTEventEmitter {
       reject("FILE_ERROR", error.localizedDescription, error)
     }
   }
-
-  @objc func addListener(_ eventName: String) {}
-  @objc func removeListeners(_ count: Double) {}
 }

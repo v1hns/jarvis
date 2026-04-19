@@ -72,13 +72,16 @@ export function HomeScreen({ onDevMode }: Props) {
         </View>
       )}
 
-      {/* Step 2 — Grant camera permission */}
+      {/* Step 2 — Register + Grant camera permission */}
       {modelsReady && permStatus === 'denied' && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Camera Permission Required</Text>
-          <Text style={styles.hint}>You'll be taken to the Meta AI app to approve camera access.</Text>
-          <Pressable style={styles.btn} onPress={grantPermission}>
-            <Text style={styles.btnText}>Grant Camera Access</Text>
+          <Text style={styles.sectionTitle}>Setup Required</Text>
+          <Text style={styles.hint}>First register Jarvis with the Meta AI app, then grant camera access.</Text>
+          <Pressable style={styles.btn} onPress={register}>
+            <Text style={styles.btnTextVisible}>1. Register with Meta AI App</Text>
+          </Pressable>
+          <Pressable style={[styles.btn, { marginTop: 8 }]} onPress={grantPermission}>
+            <Text style={styles.btnTextVisible}>2. Grant Camera Access</Text>
           </Pressable>
         </View>
       )}
@@ -200,6 +203,7 @@ const styles = StyleSheet.create({
   btn:            { flex: 1, backgroundColor: '#00ff8811', borderWidth: 1, borderColor: '#00ff8833', borderRadius: 8, padding: 14, alignItems: 'center' },
   btnDanger:      { backgroundColor: '#ff444411', borderColor: '#ff444433' },
   btnText:        { color: '#00ff88', fontSize: 13, fontWeight: '600' },
+  btnTextVisible: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
   progressBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#001a2a', paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#00aaff22' },
   progressText:   { color: '#00aaff', fontSize: 13, flex: 1 },
   confirmBanner:  { backgroundColor: '#1a0a00', padding: 16, borderTopWidth: 1, borderTopColor: '#ff880033', gap: 8 },

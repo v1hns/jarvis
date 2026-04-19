@@ -1,7 +1,7 @@
 #import <React/RCTBridgeModule.h>
 #import <React/RCTEventEmitter.h>
 
-RCT_EXTERN_MODULE(MetaDATModule, RCTEventEmitter)
+@interface RCT_EXTERN_MODULE(MetaDATModule, RCTEventEmitter)
 
 RCT_EXTERN_METHOD(configure:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
@@ -37,3 +37,5 @@ RCT_EXTERN_METHOD(saveTestCasesJSON:(NSString *)json
 
 RCT_EXTERN_METHOD(loadTestCasesJSON:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
+
+@end

@@ -6,9 +6,11 @@
     "ios": "react-native run-ios --device",
     "start": "react-native start",
     "lint": "eslint .",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "postinstall": "patch-package"
   },
   "dependencies": {
+    "@react-native-voice/voice": "^3.2.4",
     "cactus-react-native": "^0.1.0",
     "react": "18.3.1",
     "react-native": "0.76.5",
@@ -31,6 +33,7 @@
     "@types/react": "^18.3.0",
     "@types/react-native": "^0.73.0",
     "eslint": "^8.19.0",
+    "patch-package": "^8.0.1",
     "typescript": "5.0.4"
   }
 }
