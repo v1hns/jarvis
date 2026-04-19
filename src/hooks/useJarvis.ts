@@ -16,6 +16,8 @@ import {
   TestCase, ReplayResult,
   loadCases, saveCase, deleteCase, buildCase,
 } from '../modules/TestHarness';
+import { MemoryOrchestrator } from '../modules/memory/MemoryOrchestrator';
+import { answerMemoryQuery } from '../modules/memory/MemoryQueryEngine';
 
 const SYSTEM_PROMPT = `You are Jarvis, a concise AI assistant running on Meta Ray-Ban smart glasses.
 Responses must be short (1-3 sentences) since they are spoken aloud.
@@ -30,8 +32,10 @@ export interface Message {
 }
 
 export function useJarvis() {
-  const lm  = useRef<CactusLM | null>(null);
-  const stt = useRef<CactusSTT | null>(null);
+  const lm         = useRef<CactusLM | null>(null);
+  const memoryLM   = useRef<CactusLM | null>(null);
+  const stt        = useRef<CactusSTT | null>(null);
+  const memoryOrch = useRef<MemoryOrchestrator | null>(null);
 
   const [sessionState, setSessionState]       = useState<SessionState>('stopped');
   const [devices, setDevices]                 = useState<DeviceInfo[]>([]);
@@ -65,10 +69,15 @@ export function useJarvis() {
       const perm = await MetaDAT.checkPermission();
       setPermStatus(perm);
 
-      lm.current  = new CactusLM({ options: { quantization: 'int4' } });
-      stt.current = new CactusSTT({ options: { quantization: 'int4' } });
-      await Promise.all([lm.current.download(), stt.current.download()]);
-      await Promise.all([lm.current.init(),     stt.current.init()]);
+      lm.current       = new CactusLM({ options: { quantization: 'int4' } });
+      memoryLM.current = new CactusLM({ options: { quantization: 'int4' } });
+      stt.current      = new CactusSTT({ options: { quantization: 'int4' } });
+      await Promise.all([lm.current.download(), memoryLM.current.download(), stt.current.download()]);
+      await Promise.all([lm.current.init(),     memoryLM.current.init(),     stt.current.init()]);
+
+      memoryOrch.current = new MemoryOrchestrator(memoryLM.current);
+      await memoryOrch.current.init();
+
       setModelsReady(true);
     }
     init().catch(console.error);
@@ -90,6 +99,19 @@ export function useJarvis() {
     probe();
     return () => { active = false; };
   }, []);
+
+  // ─── Memory orchestrator lifecycle — active only while streaming ────────
+
+  useEffect(() => {
+    const orch = memoryOrch.current;
+    if (!orch) return;
+    if (sessionState === 'streaming') {
+      orch.runRollover().catch(err => console.warn('[Memory] rollover failed:', err));
+      orch.start();
+    } else {
+      orch.stop();
+    }
+  }, [sessionState]);
 
   // ─── Meta DAT event subscriptions ───────────────────────────────────────
 
@@ -191,6 +213,14 @@ export function useJarvis() {
           responseText = await handleDesktopAction(userText, nextMessages);
           source = 'desktop';
           break;
+
+        case 'memory_query': {
+          await memoryOrch.current?.runRollover();
+          const result = await answerMemoryQuery(lm.current, userText);
+          responseText = result.answer;
+          source = 'local';
+          break;
+        }
 
         case 'clarify':
           responseText = `I'm not sure what you meant — ${decision.reason}. Could you rephrase?`;
@@ -343,6 +373,7 @@ export function useJarvis() {
     confirmResolve.current = null;
     desktopSession.current = null;
     abortDesktop.current?.abort();
+    memoryOrch.current?.stop();
     await MetaDAT.stopSession();
     setMessages([]);
     setDesktopProgress('');
@@ -397,6 +428,11 @@ export function useJarvis() {
         case 'desktop_action':
           responseText = 'Desktop bridge not yet implemented.';
           break;
+        case 'memory_query': {
+          const result = await answerMemoryQuery(lm.current, effectiveText);
+          responseText = result.answer;
+          break;
+        }
         case 'clarify':
           responseText = `Ambiguous: ${decision.reason}`;
           break;
