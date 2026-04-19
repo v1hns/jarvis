@@ -3,7 +3,7 @@ import { AppState } from 'react-native';
 import { CactusLM } from 'cactus-react-native';
 import RNFS from 'react-native-fs';
 import Voice, { SpeechResultsEvent, SpeechErrorEvent } from '@react-native-voice/voice';
-import { MetaDAT, addDATListener, SessionState, DeviceInfo } from '../modules/MetaDAT';
+import { MetaDAT, addDATListener, SessionState, DeviceInfo, RegistrationState } from '../modules/MetaDAT';
 import { route as routePrompt, Route } from '../modules/Router';
 import { cloudComplete, cloudModelName, isCloudConfigured } from '../modules/GemmaCloud';
 import { visionQuery, isVisionConfigured } from '../modules/AnthropicVision';
@@ -195,6 +195,10 @@ export function useJarvis() {
 
       addDATListener('onError', ({ message }: { message: string }) => {
         console.error('[MetaDAT]', message);
+      }),
+
+      addDATListener('onRegistrationStateChange', (state: RegistrationState) => {
+        setRegistered(state === 'registered');
       }),
     ];
     return () => subs.forEach(s => s.remove());
@@ -399,7 +403,7 @@ export function useJarvis() {
     setSetupError(null);
     try {
       await MetaDAT.startRegistration();
-      setRegistered(true);
+      // registrationStateStream will fire 'registered' and set registered=true automatically
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error('[register]', msg);
@@ -414,9 +418,14 @@ export function useJarvis() {
       setPermStatus(status);
       if (status === 'denied') setSetupError('Camera access denied in Meta AI app. Tap to try again.');
     } catch (e: unknown) {
+      const code = (e as { code?: string })?.code;
       const msg = e instanceof Error ? e.message : String(e);
-      console.error('[grantPermission]', msg);
-      setSetupError(msg);
+      console.error('[grantPermission]', code, msg);
+      if (code === 'PERMISSION_NO_DEVICE') {
+        setSetupError('Glasses not found. Power them on and put them nearby, then try again.');
+      } else {
+        setSetupError(msg);
+      }
     }
   }
 

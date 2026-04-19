@@ -22,18 +22,22 @@ class MetaDATModule: RCTEventEmitter {
   private var audioEngine: AVAudioEngine?
   private var hasListeners = false
   private var devicesTask: Task<Void, Never>?
+  private var registrationTask: Task<Void, Never>?
 
   // MARK: - RCTEventEmitter
 
   override static func requiresMainQueueSetup() -> Bool { false }
 
   override func supportedEvents() -> [String]! {
-    ["onSessionStateChange", "onVideoFrame", "onAudioChunk", "onError", "onDevicesChanged"]
+    ["onSessionStateChange", "onVideoFrame", "onAudioChunk", "onError", "onDevicesChanged",
+     "onRegistrationStateChange"]
   }
 
   override func invalidate() {
     devicesTask?.cancel()
     devicesTask = nil
+    registrationTask?.cancel()
+    registrationTask = nil
     Task {
       for token in listenerTokens { await token.cancel() }
       listenerTokens.removeAll()
@@ -84,6 +88,17 @@ class MetaDATModule: RCTEventEmitter {
       }
     }
 
+    // Emit current registration state immediately, then stream updates
+    let initialState = Wearables.shared.registrationState
+    emit("onRegistrationStateChange", body: initialState.description)
+
+    registrationTask = Task { [weak self] in
+      for await state in Wearables.shared.registrationStateStream() {
+        guard !Task.isCancelled else { break }
+        self?.emit("onRegistrationStateChange", body: state.description)
+      }
+    }
+
     resolve(nil)
   }
 
@@ -94,6 +109,9 @@ class MetaDATModule: RCTEventEmitter {
     Task {
       do {
         try await Wearables.shared.startRegistration()
+        resolve("registered")
+      } catch RegistrationError.alreadyRegistered {
+        // Already registered — treat as success
         resolve("registered")
       } catch {
         reject("REGISTRATION_ERROR", error.localizedDescription, error)
@@ -109,6 +127,9 @@ class MetaDATModule: RCTEventEmitter {
       do {
         let status = try await Wearables.shared.checkPermissionStatus(.camera)
         resolve(status == .granted ? "granted" : "denied")
+      } catch PermissionError.noDevice, PermissionError.noDeviceWithConnection {
+        // Glasses not connected — can't check; let JS decide what to show
+        resolve("unknown")
       } catch {
         resolve("denied")
       }
@@ -121,6 +142,12 @@ class MetaDATModule: RCTEventEmitter {
       do {
         let status = try await Wearables.shared.requestPermission(.camera)
         resolve(status == .granted ? "granted" : "denied")
+      } catch PermissionError.noDevice, PermissionError.noDeviceWithConnection {
+        reject("PERMISSION_NO_DEVICE",
+               "Glasses not connected. Power them on and put them nearby first.",
+               nil)
+      } catch PermissionError.metaAINotInstalled {
+        reject("PERMISSION_ERROR", "Meta AI app is not installed.", nil)
       } catch {
         reject("PERMISSION_ERROR", error.localizedDescription, error)
       }

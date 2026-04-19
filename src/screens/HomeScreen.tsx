@@ -62,10 +62,10 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
         </View>
       )}
 
-      {/* Setup — step-by-step: register → grant camera → connect */}
-      {modelsReady && permStatus === 'denied' && !registered && (
+      {/* Setup — register → (glasses on) → grant camera → connect */}
+      {modelsReady && (permStatus === 'unknown' || permStatus === 'denied') && !registered && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Step 1 of 2 — Pair with Meta AI</Text>
+          <Text style={styles.sectionTitle}>Step 1 — Pair with Meta AI</Text>
           <Text style={styles.hint}>Opens the Meta AI app to pair Jarvis with your Ray-Ban glasses.</Text>
           {setupError && <Text style={styles.errorText}>{setupError}</Text>}
           <Pressable style={styles.btn} onPress={register}>
@@ -76,8 +76,19 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
 
       {modelsReady && permStatus === 'denied' && registered && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Step 2 of 2 — Grant Camera Access</Text>
-          <Text style={styles.hint}>Opens the Meta AI app to allow Jarvis to use the glasses camera.</Text>
+          <Text style={styles.sectionTitle}>Step 2 — Grant Camera Access</Text>
+          <Text style={styles.hint}>Put your glasses on and nearby, then tap below to grant camera access in Meta AI.</Text>
+          {setupError && <Text style={styles.errorText}>{setupError}</Text>}
+          <Pressable style={styles.btn} onPress={grantPermission}>
+            <Text style={styles.btnTextVisible}>Grant Camera Access</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {modelsReady && permStatus === 'unknown' && registered && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Step 2 — Grant Camera Access</Text>
+          <Text style={styles.hint}>Power on your glasses and put them nearby. Camera permission is granted through the glasses.</Text>
           {setupError && <Text style={styles.errorText}>{setupError}</Text>}
           <Pressable style={styles.btn} onPress={grantPermission}>
             <Text style={styles.btnTextVisible}>Grant Camera Access</Text>

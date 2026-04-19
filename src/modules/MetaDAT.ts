@@ -90,12 +90,16 @@ export const MetaDAT = {
 
 const emitter = new NativeEventEmitter(MetaDATModule);
 
+// RegistrationState mirrors RegistrationState enum from MWDATCore
+export type RegistrationState = 'unavailable' | 'available' | 'registering' | 'registered';
+
 export type DATEventMap = {
   onSessionStateChange: SessionState;
   onDevicesChanged: DeviceInfo[];
   onVideoFrame: VideoFrame;
   onAudioChunk: AudioChunk;
   onError: { code: string; message: string };
+  onRegistrationStateChange: RegistrationState;
 };
 
 export function addDATListener<K extends keyof DATEventMap>(
