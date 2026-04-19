@@ -5,6 +5,7 @@
   "scripts": {
     "ios": "react-native run-ios --device",
     "start": "react-native start",
+    "bundle:ios": "react-native bundle --entry-file=index.js --platform=ios --dev=false --bundle-output=ios/main.jsbundle --assets-dest=ios --reset-cache",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
     "test:build": "tsc -p tsconfig.test.json",
