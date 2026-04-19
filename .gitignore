@@ -27,3 +27,6 @@ test-dist/
 .env
 .DS_Store
 *.log
+
+# Claude Code
+.claude/worktrees/
