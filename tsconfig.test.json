@@ -3,6 +3,7 @@
     "target": "ES2022",
     "module": "CommonJS",
     "moduleResolution": "node",
+    "lib": ["ES2022", "DOM"],
     "outDir": "test-dist",
     "rootDir": "src",
     "strict": true,
@@ -12,6 +13,8 @@
   },
   "include": [
     "src/modules/Router.ts",
-    "src/modules/TestHarnessCore.ts"
+    "src/modules/TestHarnessCore.ts",
+    "src/modules/GemmaCloudCore.ts",
+    "src/modules/AnthropicVisionCore.ts"
   ]
 }
