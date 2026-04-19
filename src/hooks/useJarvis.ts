@@ -427,9 +427,9 @@ export function useJarvis() {
       const msg = e instanceof Error ? e.message : String(e);
       console.error('[grantPermission]', code, msg);
       if (code === 'PERMISSION_NO_DEVICE') {
-        setSetupError('Glasses not found. Power them on and put them nearby, then try again.');
+        setSetupError(`Glasses not found. Power them on and put them nearby, then try again. [${code}] ${msg}`);
       } else {
-        setSetupError(msg);
+        setSetupError(`[${code ?? 'ERR'}] ${msg}`);
       }
     }
   }

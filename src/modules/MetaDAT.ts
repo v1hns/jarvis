@@ -89,6 +89,15 @@ export const MetaDAT = {
   startAudio(): Promise<void> {
     return MetaDATModule.startAudio();
   },
+
+  /** Returns the in-memory ring buffer of native DAT log lines for on-device diagnostics */
+  getLogs(): Promise<string[]> {
+    return MetaDATModule.getLogs();
+  },
+
+  clearLogs(): Promise<void> {
+    return MetaDATModule.clearLogs();
+  },
 };
 
 // ── Events ────────────────────────────────────────────────────────────────────

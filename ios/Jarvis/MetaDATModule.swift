@@ -3,18 +3,45 @@ import AVFoundation
 import MWDATCore
 import MWDATCamera
 
+// In-memory ring buffer of DAT-related log lines, surfaced to JS via getLogs()
+// so the DEV screen can show what happened on-device without Xcode attached.
+@objc class DATLogger: NSObject {
+  @objc static let shared = DATLogger()
+  private let queue = DispatchQueue(label: "jarvis.dat.logger")
+  private var lines: [String] = []
+  private let maxLines = 500
+  private static let fmt: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return f
+  }()
+
+  func log(_ message: String) {
+    let line = "[\(DATLogger.fmt.string(from: Date()))] \(message)"
+    NSLog("%@", line)
+    queue.sync {
+      lines.append(line)
+      if lines.count > maxLines { lines.removeFirst(lines.count - maxLines) }
+    }
+  }
+
+  func all() -> [String] { queue.sync { Array(lines) } }
+  func clear()           { queue.sync { lines.removeAll() } }
+}
+
 // Called from AppDelegate before JS starts, so handleUrl works even on cold launch
 @objc class WearablesURLHandler: NSObject {
   @objc static func configureEarly() {
     try? Wearables.configure()
   }
   @objc static func handle(_ url: URL) {
+    DATLogger.shared.log("[URL] incoming \(url.absoluteString)")
     Task {
       do {
         try await Wearables.shared.handleUrl(url)
-        NSLog("[WearablesURLHandler] handled callback: \(url.absoluteString)")
+        DATLogger.shared.log("[URL] handleUrl OK for \(url.absoluteString)")
       } catch {
-        NSLog("[WearablesURLHandler] handleUrl failed for \(url.absoluteString): \(error)")
+        DATLogger.shared.log("[URL] handleUrl FAILED for \(url.absoluteString): \(error)")
       }
     }
   }
@@ -120,13 +147,17 @@ class MetaDATModule: RCTEventEmitter {
   @objc func startRegistration(_ resolve: @escaping RCTPromiseResolveBlock,
                                 rejecter reject: @escaping RCTPromiseRejectBlock) {
     Task {
+      DATLogger.shared.log("[Reg] startRegistration called")
       do {
         try await Wearables.shared.startRegistration()
+        DATLogger.shared.log("[Reg] startRegistration OK")
         resolve("registered")
       } catch RegistrationError.alreadyRegistered {
-        // Already registered — treat as success
+        DATLogger.shared.log("[Reg] startRegistration alreadyRegistered (treated as success)")
         resolve("registered")
       } catch {
+        let ns = error as NSError
+        DATLogger.shared.log("[Reg] startRegistration FAILED: \(error) [domain=\(ns.domain) code=\(ns.code)]")
         reject("REGISTRATION_ERROR", error.localizedDescription, error)
       }
     }
@@ -135,10 +166,13 @@ class MetaDATModule: RCTEventEmitter {
   @objc func startUnregistration(_ resolve: @escaping RCTPromiseResolveBlock,
                                   rejecter reject: @escaping RCTPromiseRejectBlock) {
     Task {
+      DATLogger.shared.log("[Reg] startUnregistration called")
       do {
         try await Wearables.shared.startUnregistration()
+        DATLogger.shared.log("[Reg] startUnregistration OK")
         resolve(nil)
       } catch {
+        DATLogger.shared.log("[Reg] startUnregistration FAILED: \(error)")
         reject("UNREGISTRATION_ERROR", error.localizedDescription, error)
       }
     }
@@ -164,42 +198,49 @@ class MetaDATModule: RCTEventEmitter {
   @objc func requestPermission(_ resolve: @escaping RCTPromiseResolveBlock,
                                 rejecter reject: @escaping RCTPromiseRejectBlock) {
     Task {
+      DATLogger.shared.log("[Perm] requestPermission(.camera) called")
       do {
         let status = try await Wearables.shared.requestPermission(.camera)
+        DATLogger.shared.log("[Perm] requestPermission resolved status=\(status == .granted ? "granted" : "denied")")
         resolve(status == .granted ? "granted" : "denied")
       } catch let err as PermissionError {
-        NSLog("[MetaDATModule] requestPermission PermissionError rawValue=\(err.rawValue)")
+        let caseName: String
+        let baseMsg: String
+        let code: String
         switch err {
-        case .noDevice, .noDeviceWithConnection:
-          reject("PERMISSION_NO_DEVICE",
-                 "Glasses not connected. Power them on and put them nearby first.",
-                 err)
+        case .noDevice:
+          caseName = "noDevice"; code = "PERMISSION_NO_DEVICE"
+          baseMsg = "Glasses not connected. Power them on and put them nearby first."
+        case .noDeviceWithConnection:
+          caseName = "noDeviceWithConnection"; code = "PERMISSION_NO_DEVICE"
+          baseMsg = "Glasses are paired but not connected. Wake them up and retry."
         case .metaAINotInstalled:
-          reject("PERMISSION_ERROR", "Meta AI app is not installed.", err)
+          caseName = "metaAINotInstalled"; code = "PERMISSION_ERROR"
+          baseMsg = "Meta AI app is not installed."
         case .connectionError:
-          reject("PERMISSION_ERROR",
-                 "Connection to Meta AI failed. Open the Meta AI app once, then retry.",
-                 err)
+          caseName = "connectionError"; code = "PERMISSION_ERROR"
+          baseMsg = "Connection to Meta AI failed. Open the Meta AI app once, then retry."
         case .requestInProgress:
-          reject("PERMISSION_ERROR",
-                 "A permission request is already in progress. Wait a moment and retry.",
-                 err)
+          caseName = "requestInProgress"; code = "PERMISSION_ERROR"
+          baseMsg = "A permission request is already in progress. Wait a moment and retry."
         case .requestTimeout:
-          reject("PERMISSION_ERROR",
-                 "Meta AI didn't respond in time. Make sure the glasses are on and nearby, then retry.",
-                 err)
+          caseName = "requestTimeout"; code = "PERMISSION_ERROR"
+          baseMsg = "Meta AI didn't respond in time. Make sure the glasses are on and nearby, then retry."
         case .internalError:
-          reject("PERMISSION_ERROR",
-                 "Meta AI SDK internal error. Try Reset Pairing, re-register, and retry.",
-                 err)
+          caseName = "internalError"; code = "PERMISSION_ERROR"
+          baseMsg = "Meta AI SDK internal error. Try Reset Pairing, re-register, and retry."
         @unknown default:
-          reject("PERMISSION_ERROR",
-                 "Unknown PermissionError case rawValue=\(err.rawValue)",
-                 err)
+          caseName = "unknown"; code = "PERMISSION_ERROR"
+          baseMsg = "Unknown PermissionError case."
         }
+        let detail = "\(baseMsg) [case=\(caseName) rawValue=\(err.rawValue)]"
+        DATLogger.shared.log("[Perm] requestPermission FAILED: \(detail)")
+        reject(code, detail, err)
       } catch {
-        NSLog("[MetaDATModule] requestPermission non-PermissionError: \(error)")
-        reject("PERMISSION_ERROR", "Unexpected error: \(error)", error)
+        let ns = error as NSError
+        let detail = "Unexpected error: \(error) [domain=\(ns.domain) code=\(ns.code)]"
+        DATLogger.shared.log("[Perm] requestPermission FAILED (non-PermissionError): \(detail)")
+        reject("PERMISSION_ERROR", detail, error)
       }
     }
   }
@@ -387,5 +428,18 @@ class MetaDATModule: RCTEventEmitter {
     } catch {
       reject("FILE_ERROR", error.localizedDescription, error)
     }
+  }
+
+  // MARK: - Diagnostics
+
+  @objc func getLogs(_ resolve: @escaping RCTPromiseResolveBlock,
+                      rejecter reject: @escaping RCTPromiseRejectBlock) {
+    resolve(DATLogger.shared.all())
+  }
+
+  @objc func clearLogs(_ resolve: @escaping RCTPromiseResolveBlock,
+                        rejecter reject: @escaping RCTPromiseRejectBlock) {
+    DATLogger.shared.clear()
+    resolve(nil)
   }
 }

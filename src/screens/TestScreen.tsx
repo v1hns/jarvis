@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { JarvisState } from '../hooks/useJarvis';
+import { MetaDAT } from '../modules/MetaDAT';
 import type { TestCase } from '../modules/TestHarness';
 import type { ReplayResult } from '../modules/TestHarness';
 
@@ -29,6 +30,24 @@ export function TestScreen({ onBack, jarvis }: Props) {
   const [replaying, setReplaying]   = useState<string | null>(null);
   const [result, setResult]         = useState<ReplayResult | null>(null);
   const [replayError, setReplayError] = useState<string | null>(null);
+  const [logs, setLogs]             = useState<string[]>([]);
+  const [logsOpen, setLogsOpen]     = useState(true);
+
+  const refreshLogs = useCallback(async () => {
+    try { setLogs(await MetaDAT.getLogs()); }
+    catch (e) { console.warn('[getLogs]', e); }
+  }, []);
+
+  useEffect(() => {
+    refreshLogs();
+    const iv = setInterval(refreshLogs, 2000);
+    return () => clearInterval(iv);
+  }, [refreshLogs]);
+
+  const handleClearLogs = useCallback(async () => {
+    await MetaDAT.clearLogs();
+    await refreshLogs();
+  }, [refreshLogs]);
 
   const handleArm = useCallback(() => {
     if (isRecording) disarmRecording();
@@ -154,6 +173,29 @@ export function TestScreen({ onBack, jarvis }: Props) {
         )}
       </View>
 
+      <View style={styles.logPanel}>
+        <View style={styles.logHeader}>
+          <Pressable onPress={() => setLogsOpen(o => !o)} style={styles.logTitleHit}>
+            <Text style={styles.logTitle}>
+              {logsOpen ? '▼' : '▶'} DAT LOGS ({logs.length})
+            </Text>
+          </Pressable>
+          <Pressable onPress={refreshLogs} style={styles.logBtn}>
+            <Text style={styles.logBtnText}>Refresh</Text>
+          </Pressable>
+          <Pressable onPress={handleClearLogs} style={[styles.logBtn, styles.logBtnDanger]}>
+            <Text style={[styles.logBtnText, styles.logBtnDangerText]}>Clear</Text>
+          </Pressable>
+        </View>
+        {logsOpen && (
+          <ScrollView style={styles.logScroll} contentContainerStyle={styles.logContent}>
+            {logs.length === 0
+              ? <Text style={styles.logEmpty}>No log lines yet. Trigger Register / Grant Camera to populate.</Text>
+              : logs.map((line, i) => <Text key={i} style={styles.logLine}>{line}</Text>)}
+          </ScrollView>
+        )}
+      </View>
+
       {isThinking && (
         <View style={styles.thinking}>
           <ActivityIndicator size="small" color="#00ff88" />
@@ -245,4 +287,20 @@ const styles = StyleSheet.create({
   actionText: { color: '#00ff88', fontSize: 12, fontWeight: '600' },
   deleteBtn:  { backgroundColor: '#ff444411', borderColor: '#ff444422' },
   deleteText: { color: '#ff4444' },
+
+  logPanel:       { borderBottomWidth: 1, borderBottomColor: '#1a1a1a' },
+  logHeader:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12,
+                    paddingVertical: 8, gap: 8 },
+  logTitleHit:    { flex: 1 },
+  logTitle:       { color: '#00ff88', fontSize: 11, fontWeight: '700',
+                    letterSpacing: 1 },
+  logBtn:         { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4,
+                    backgroundColor: '#00ff8811', borderWidth: 1, borderColor: '#00ff8833' },
+  logBtnText:     { color: '#00ff88', fontSize: 10, fontWeight: '700' },
+  logBtnDanger:   { backgroundColor: '#ff444411', borderColor: '#ff444433' },
+  logBtnDangerText: { color: '#ff4444' },
+  logScroll:      { maxHeight: 220, backgroundColor: '#050505' },
+  logContent:     { padding: 10, gap: 2 },
+  logEmpty:       { color: '#333', fontSize: 11, fontStyle: 'italic' },
+  logLine:        { color: '#aaa', fontSize: 10, fontFamily: 'Menlo', lineHeight: 14 },
 });

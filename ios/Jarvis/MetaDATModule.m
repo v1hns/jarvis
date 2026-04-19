@@ -41,4 +41,10 @@ RCT_EXTERN_METHOD(saveTestCasesJSON:(NSString *)json
 RCT_EXTERN_METHOD(loadTestCasesJSON:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(getLogs:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(clearLogs:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end
