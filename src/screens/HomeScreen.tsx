@@ -19,7 +19,7 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
   const {
     sessionState, isStreaming, isConnecting,
     devices, messages, isThinking, modelsReady,
-    permStatus, transcript, lastRoute,
+    permStatus, registered, setupError, transcript, lastRoute,
     laptopOnline, desktopProgress, needsConfirm,
     register, grantPermission, connect, connectSpecific,
     snapAndAsk, disconnect, confirmDesktopAction,
@@ -62,32 +62,30 @@ export function HomeScreen({ onDevMode, jarvis }: Props) {
         </View>
       )}
 
-      {/* Step 1 — Register */}
-      {modelsReady && sessionState === 'stopped' && permStatus === 'unknown' && (
+      {/* Setup — step-by-step: register → grant camera → connect */}
+      {modelsReady && permStatus === 'denied' && !registered && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Connect to Ray-Ban Glasses</Text>
-          <Text style={styles.hint}>Pairs Jarvis with the Meta AI app on this phone.</Text>
+          <Text style={styles.sectionTitle}>Step 1 of 2 — Pair with Meta AI</Text>
+          <Text style={styles.hint}>Opens the Meta AI app to pair Jarvis with your Ray-Ban glasses.</Text>
+          {setupError && <Text style={styles.errorText}>{setupError}</Text>}
           <Pressable style={styles.btn} onPress={register}>
-            <Text style={styles.btnText}>Register with Meta AI App</Text>
+            <Text style={styles.btnTextVisible}>Register with Meta AI App</Text>
           </Pressable>
         </View>
       )}
 
-      {/* Step 2 — Register + Grant camera permission */}
-      {modelsReady && permStatus === 'denied' && (
+      {modelsReady && permStatus === 'denied' && registered && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Setup Required</Text>
-          <Text style={styles.hint}>First register Jarvis with the Meta AI app, then grant camera access.</Text>
-          <Pressable style={styles.btn} onPress={register}>
-            <Text style={styles.btnTextVisible}>1. Register with Meta AI App</Text>
-          </Pressable>
-          <Pressable style={[styles.btn, { marginTop: 8 }]} onPress={grantPermission}>
-            <Text style={styles.btnTextVisible}>2. Grant Camera Access</Text>
+          <Text style={styles.sectionTitle}>Step 2 of 2 — Grant Camera Access</Text>
+          <Text style={styles.hint}>Opens the Meta AI app to allow Jarvis to use the glasses camera.</Text>
+          {setupError && <Text style={styles.errorText}>{setupError}</Text>}
+          <Pressable style={styles.btn} onPress={grantPermission}>
+            <Text style={styles.btnTextVisible}>Grant Camera Access</Text>
           </Pressable>
         </View>
       )}
 
-      {/* Step 3 — Connect */}
+      {/* Connect */}
       {modelsReady && permStatus === 'granted' && sessionState === 'stopped' && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Ready</Text>
@@ -201,6 +199,7 @@ const styles = StyleSheet.create({
   transcript:     { color: '#2a2a2a', fontSize: 12, paddingHorizontal: 16, paddingBottom: 4 },
   thinking:       { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 8 },
   toolbar:        { flexDirection: 'row', padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: '#1a1a1a' },
+  errorText:      { color: '#ff4444', fontSize: 12, lineHeight: 16, marginBottom: 4 },
   btn:            { flex: 1, backgroundColor: '#00ff8811', borderWidth: 1, borderColor: '#00ff8833', borderRadius: 8, padding: 14, alignItems: 'center' },
   btnDanger:      { backgroundColor: '#ff444411', borderColor: '#ff444433' },
   btnText:        { color: '#00ff88', fontSize: 13, fontWeight: '600' },

@@ -47,6 +47,8 @@ export function useJarvis() {
   const [transcript, setTranscript]           = useState('');
   const [lastRoute, setLastRoute]             = useState<Route | null>(null);
   const [permStatus, setPermStatus]           = useState<'unknown' | 'granted' | 'denied'>('unknown');
+  const [registered, setRegistered]           = useState(false);
+  const [setupError, setSetupError]           = useState<string | null>(null);
   const [laptopOnline, setLaptopOnline]       = useState<boolean | null>(null);
   const [desktopProgress, setDesktopProgress] = useState<string>('');
   const [needsConfirm, setNeedsConfirm]       = useState<string | null>(null);
@@ -87,10 +89,8 @@ export function useJarvis() {
       const { lm: mainModel, error: lmErr } = await CactusLM.init({ model: modelPath });
       if (lmErr || !mainModel) { console.error('[CactusLM] init failed', lmErr); return; }
       lm.current = mainModel;
-
-      const { lm: memModel, error: memErr } = await CactusLM.init({ model: modelPath });
-      if (memErr || !memModel) { console.error('[CactusLM] memory init failed', memErr); return; }
-      memoryLM.current = memModel;
+      // Share one model instance — loading twice causes ~700 MB peak and OOM crash
+      memoryLM.current = mainModel;
 
       memoryOrch.current = new MemoryOrchestrator(memoryLM.current);
       await memoryOrch.current.init();
@@ -396,15 +396,28 @@ export function useJarvis() {
   // ─── Public controls ─────────────────────────────────────────────────────
 
   async function register() {
-    try { await MetaDAT.startRegistration(); }
-    catch (e) { console.error('[register]', e); }
+    setSetupError(null);
+    try {
+      await MetaDAT.startRegistration();
+      setRegistered(true);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[register]', msg);
+      setSetupError(msg);
+    }
   }
 
   async function grantPermission() {
+    setSetupError(null);
     try {
       const status = await MetaDAT.requestPermission();
       setPermStatus(status);
-    } catch (e) { console.error('[grantPermission]', e); }
+      if (status === 'denied') setSetupError('Camera access denied in Meta AI app. Tap to try again.');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[grantPermission]', msg);
+      setSetupError(msg);
+    }
   }
 
   async function connect() {
@@ -525,6 +538,8 @@ export function useJarvis() {
     desktopProgress,
     needsConfirm,
     cloudModel: cloudModelName(),
+    registered,
+    setupError,
     register,
     grantPermission,
     connect,

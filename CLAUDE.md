@@ -244,6 +244,10 @@ App.tsx
 | ✅ FIXED | `Router.ts` `heuristicRoute` used `cloudEnabled` without it being a parameter → ReferenceError on any non-hint voice query | Added `cloudEnabled: boolean` to function signature |
 | ✅ FIXED | `connect()`, `connectSpecific()`, `snapAndAsk()` had no try/catch → silent failure on button press | Added try/catch with console.error |
 | ✅ FIXED | `useJarvis` called in both `HomeScreen` and `TestScreen` → double model load, OOM crash, freeze on back navigation | Lifted hook to `App.tsx`, passed as prop |
+| ✅ FIXED | `CactusLM.init` called twice → ~700 MB RAM → iOS OOM kill → "something went wrong" crash dialog | Share single model instance for main LM and memory LM |
+| ✅ FIXED | Permission setup loop: after Register, `checkPermission` still 'denied', screen unchanged → user keeps tapping Register | Track `registered` state in JS; show Step 1 (Register) then Step 2 (Grant Camera) sequentially; surface errors inline |
+| ✅ FIXED | Dead code: Step 1 (`permStatus === 'unknown' && modelsReady`) never rendered — permission resolved before models loaded | Removed; replaced with sequential step-by-step setup UI |
 | 🔲 OPEN | Metro bundler crashes with Node 22 — use Node 20 via nvm | `nvm use 20 && npx react-native run-ios --device` |
-| 🔲 OPEN | `.env` keys all blank — cloud Gemma, Anthropic Vision, ElevenLabs will silently fall back to local/Apple TTS | Fill in keys from respective consoles |
-| 🔲 OPEN | `startAutoSession` Swift code uses `Wearables.shared.createSession(deviceSelector:)` + `dSession.addStream()` — not in v0.6.0 CLAUDE.md docs. May differ from documented `StreamSession` constructor API. Verify against actual SDK headers if Connect button still fails natively. | — |
+| 🔲 OPEN | `.env` keys all blank — cloud Gemma, Anthropic Vision, ElevenLabs silently fall back | Fill in keys from respective consoles |
+| 🔲 OPEN | `startAutoSession` uses `Wearables.shared.createSession(deviceSelector:)` + `dSession.addStream()` — not in v0.6.0 docs. Verify against SDK headers if Connect still fails natively. | — |
+| 🔲 OPEN | `registered` state is session-only (not persisted). If app restarts after pairing, user must re-tap Register even though they're already paired. Fix: subscribe to `registrationStateStream()` in Swift and emit `onRegistrationStateChange` event. | — |
