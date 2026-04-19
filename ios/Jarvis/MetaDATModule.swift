@@ -9,7 +9,14 @@ import MWDATCamera
     try? Wearables.configure()
   }
   @objc static func handle(_ url: URL) {
-    Task { try? await Wearables.shared.handleUrl(url) }
+    Task {
+      do {
+        try await Wearables.shared.handleUrl(url)
+        NSLog("[WearablesURLHandler] handled callback: \(url.absoluteString)")
+      } catch {
+        NSLog("[WearablesURLHandler] handleUrl failed for \(url.absoluteString): \(error)")
+      }
+    }
   }
 }
 
