@@ -30,11 +30,11 @@
 		<key>AppLinkURLScheme</key>
 		<string>jarvis://</string>
 		<key>ClientToken</key>
-		<string>AR|1487636526490742|e44e5c5635fecc4410605f6209c6ec9a</string>
+		<string>AR|1708495033845699|d977303dbbb09f18fd91a9a0a167fc2c</string>
 		<key>MetaAppID</key>
-		<string>1487636526490742</string>
+		<string>1708495033845699</string>
 		<key>TeamID</key>
-		<string>Y74K7KYWK4</string>
+		<string>975C5FUVRQ</string>
 	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Jarvis uses Bluetooth to connect to your Meta Ray-Ban glasses.</string>
