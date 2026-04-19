@@ -10,8 +10,8 @@ let ttsInitialized = false;
 
 function initTts() {
   if (ttsInitialized) return;
-  Tts.setDefaultRate(0.5);
-  Tts.setDefaultPitch(1.0);
+  Tts.setDefaultRate(0.5, false);
+  Tts.setDefaultPitch(1.0, false);
   ttsInitialized = true;
 }
 
