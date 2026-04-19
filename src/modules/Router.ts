@@ -50,7 +50,7 @@ const LONG_PROMPT_CHARS = 600;
  * model call) and as the fallback when the LM isn't loaded yet. Returns null
  * when no heuristic fires — caller should invoke the model-based router.
  */
-export function heuristicRoute(prompt: string, hasImage: boolean): RouteDecision | null {
+export function heuristicRoute(prompt: string, hasImage: boolean, cloudEnabled: boolean): RouteDecision | null {
   // Memory takes precedence over vision when the prompt references the past —
   // an image of an empty desk doesn't answer "where did I leave my keys".
   if (MEMORY_HINT.test(prompt)) {

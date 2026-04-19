@@ -395,24 +395,37 @@ export function useJarvis() {
 
   // ─── Public controls ─────────────────────────────────────────────────────
 
-  async function register() { await MetaDAT.startRegistration(); }
-
-  async function grantPermission() {
-    const status = await MetaDAT.requestPermission();
-    setPermStatus(status);
+  async function register() {
+    try { await MetaDAT.startRegistration(); }
+    catch (e) { console.error('[register]', e); }
   }
 
-  async function connect() { await MetaDAT.startAutoSession(); }
+  async function grantPermission() {
+    try {
+      const status = await MetaDAT.requestPermission();
+      setPermStatus(status);
+    } catch (e) { console.error('[grantPermission]', e); }
+  }
 
-  async function connectSpecific(deviceId: string) { await MetaDAT.startSession(deviceId); }
+  async function connect() {
+    try { await MetaDAT.startAutoSession(); }
+    catch (e) { console.error('[connect]', e); }
+  }
+
+  async function connectSpecific(deviceId: string) {
+    try { await MetaDAT.startSession(deviceId); }
+    catch (e) { console.error('[connectSpecific]', e); }
+  }
 
   async function snapAndAsk(question?: string) {
-    const imageBase64 = await MetaDAT.capturePhoto();
-    if (question) await reply(question, imageBase64);
-    else {
-      await stopVoice();
-      await startVoice();
-    }
+    try {
+      const imageBase64 = await MetaDAT.capturePhoto();
+      if (question) await reply(question, imageBase64);
+      else {
+        await stopVoice();
+        await startVoice();
+      }
+    } catch (e) { console.error('[snapAndAsk]', e); }
   }
 
   async function disconnect() {
@@ -527,3 +540,5 @@ export function useJarvis() {
     removeTestCase,
   };
 }
+
+export type JarvisState = ReturnType<typeof useJarvis>;

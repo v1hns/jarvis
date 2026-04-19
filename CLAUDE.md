@@ -217,7 +217,33 @@ Cloud Gemma key in `.env` as `GEMMA_API_KEY`. If unset, all queries stay local.
 Ray-Ban Meta Gen 1+2, Ray-Ban Meta Display (v0.6.0+), Oakley Meta HSTN/Vanguard
 
 ## Requirements
-- iPhone iOS 15.2+, Xcode 14+ on Mac, Node 18+
+- iPhone iOS 15.2+, Xcode 14+ on Mac, **Node 20 LTS** (Node 22 causes Metro crash)
 - Meta AI app v247+ on same iPhone
 - Glasses firmware v20+ (Ray-Ban Meta) / v21+ (Display)
 - Developer Mode: tap version 5x in Meta AI app → Device → About
+
+---
+
+## Architecture — hook ownership
+
+`useJarvis` is called **once in `App.tsx`** and passed as a prop (`jarvis: JarvisState`) to both `HomeScreen` and `TestScreen`. Do NOT call `useJarvis()` inside the screens — it would load two CactusLM instances (~700 MB) and re-initialize on every navigation.
+
+```
+App.tsx
+  useJarvis()          ← single instance, models load once
+  ├── HomeScreen({ jarvis })
+  └── TestScreen({ jarvis })
+```
+
+---
+
+## Known bugs / issue tracker
+
+| Status | Issue | Fix |
+|---|---|---|
+| ✅ FIXED | `Router.ts` `heuristicRoute` used `cloudEnabled` without it being a parameter → ReferenceError on any non-hint voice query | Added `cloudEnabled: boolean` to function signature |
+| ✅ FIXED | `connect()`, `connectSpecific()`, `snapAndAsk()` had no try/catch → silent failure on button press | Added try/catch with console.error |
+| ✅ FIXED | `useJarvis` called in both `HomeScreen` and `TestScreen` → double model load, OOM crash, freeze on back navigation | Lifted hook to `App.tsx`, passed as prop |
+| 🔲 OPEN | Metro bundler crashes with Node 22 — use Node 20 via nvm | `nvm use 20 && npx react-native run-ios --device` |
+| 🔲 OPEN | `.env` keys all blank — cloud Gemma, Anthropic Vision, ElevenLabs will silently fall back to local/Apple TTS | Fill in keys from respective consoles |
+| 🔲 OPEN | `startAutoSession` Swift code uses `Wearables.shared.createSession(deviceSelector:)` + `dSession.addStream()` — not in v0.6.0 CLAUDE.md docs. May differ from documented `StreamSession` constructor API. Verify against actual SDK headers if Connect button still fails natively. | — |

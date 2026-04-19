@@ -8,13 +8,14 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useJarvis, Message } from '../hooks/useJarvis';
+import { Message, JarvisState } from '../hooks/useJarvis';
 
 interface Props {
   onDevMode: () => void;
+  jarvis: JarvisState;
 }
 
-export function HomeScreen({ onDevMode }: Props) {
+export function HomeScreen({ onDevMode, jarvis }: Props) {
   const {
     sessionState, isStreaming, isConnecting,
     devices, messages, isThinking, modelsReady,
@@ -22,7 +23,7 @@ export function HomeScreen({ onDevMode }: Props) {
     laptopOnline, desktopProgress, needsConfirm,
     register, grantPermission, connect, connectSpecific,
     snapAndAsk, disconnect, confirmDesktopAction,
-  } = useJarvis();
+  } = jarvis;
 
   const renderMessage = useCallback(({ item }: { item: Message }) => (
     <View style={[styles.bubble, item.role === 'assistant' ? styles.assistantBubble : styles.userBubble]}>

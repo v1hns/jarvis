@@ -9,20 +9,21 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useJarvis } from '../hooks/useJarvis';
+import { JarvisState } from '../hooks/useJarvis';
 import type { TestCase } from '../modules/TestHarness';
 import type { ReplayResult } from '../modules/TestHarness';
 
 interface Props {
   onBack: () => void;
+  jarvis: JarvisState;
 }
 
-export function TestScreen({ onBack }: Props) {
+export function TestScreen({ onBack, jarvis }: Props) {
   const {
     modelsReady, isThinking,
     isRecording, armRecording, disarmRecording,
     testCases, replayCase, removeTestCase,
-  } = useJarvis();
+  } = jarvis;
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [replaying, setReplaying]   = useState<string | null>(null);
