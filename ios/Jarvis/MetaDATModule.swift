@@ -125,6 +125,18 @@ class MetaDATModule: RCTEventEmitter {
     }
   }
 
+  @objc func startUnregistration(_ resolve: @escaping RCTPromiseResolveBlock,
+                                  rejecter reject: @escaping RCTPromiseRejectBlock) {
+    Task {
+      do {
+        try await Wearables.shared.startUnregistration()
+        resolve(nil)
+      } catch {
+        reject("UNREGISTRATION_ERROR", error.localizedDescription, error)
+      }
+    }
+  }
+
   // MARK: - Permissions
 
   @objc func checkPermission(_ resolve: @escaping RCTPromiseResolveBlock,

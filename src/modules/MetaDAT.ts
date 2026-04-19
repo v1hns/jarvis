@@ -51,6 +51,11 @@ export const MetaDAT = {
     return MetaDATModule.startRegistration();
   },
 
+  /** Clears local Meta AI pairing. Use when the stored token is rejected. */
+  startUnregistration(): Promise<void> {
+    return MetaDATModule.startUnregistration();
+  },
+
   /** Returns current camera permission without prompting */
   checkPermission(): Promise<PermissionStatus> {
     return MetaDATModule.checkPermission();

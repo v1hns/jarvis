@@ -435,8 +435,26 @@ export function useJarvis() {
   }
 
   async function connect() {
+    setSetupError(null);
     try { await MetaDAT.startAutoSession(); }
-    catch (e) { console.error('[connect]', e); }
+    catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[connect]', msg);
+      setSetupError(msg);
+    }
+  }
+
+  async function resetPairing() {
+    setSetupError(null);
+    try {
+      await MetaDAT.startUnregistration();
+      setRegistered(false);
+      setPermStatus('unknown');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[resetPairing]', msg);
+      setSetupError(msg);
+    }
   }
 
   async function connectSpecific(deviceId: string) {
@@ -556,6 +574,7 @@ export function useJarvis() {
     setupError,
     register,
     grantPermission,
+    resetPairing,
     connect,
     connectSpecific,
     snapAndAsk,
