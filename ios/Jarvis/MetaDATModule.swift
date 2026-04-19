@@ -174,7 +174,11 @@ class MetaDATModule: RCTEventEmitter {
       } catch PermissionError.metaAINotInstalled {
         reject("PERMISSION_ERROR", "Meta AI app is not installed.", nil)
       } catch {
-        reject("PERMISSION_ERROR", error.localizedDescription, error)
+        // Dump the concrete enum case + full description — localizedDescription
+        // on MWDATCore.PermissionError is just "Something went wrong."
+        let detail = String(describing: error)
+        NSLog("[MetaDATModule] requestPermission failed: \(detail)")
+        reject("PERMISSION_ERROR", "PermissionError: \(detail)", error)
       }
     }
   }
