@@ -1,5 +1,13 @@
-import type { CactusLM } from 'cactus-react-native';
-import { isCloudConfigured } from './GemmaCloud';
+/**
+ * Minimal shape Router depends on. Matches `RouterLM.complete` from
+ * cactus-react-native but declared locally so the module compiles against
+ * plain Node (for tests) without the bundler-conditional RN package entry.
+ */
+export interface RouterLM {
+  complete(args: {
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+  }): Promise<{ response: string }>;
+}
 
 export type Route =
   | 'local_answer'
@@ -54,7 +62,7 @@ export function heuristicRoute(prompt: string, hasImage: boolean): RouteDecision
   if (DESKTOP_HINT.test(prompt)) {
     return { route: 'desktop_action', confidence: 0.8, reason: 'desktop verb detected' };
   }
-  if (!isCloudConfigured()) {
+  if (!cloudEnabled) {
     return { route: 'local_answer', confidence: 0.7, reason: 'cloud disabled' };
   }
   if (prompt.length >= LONG_PROMPT_CHARS || CODE_HINT.test(prompt) || PLAN_HINT.test(prompt)) {
@@ -68,7 +76,7 @@ export function heuristicRoute(prompt: string, hasImage: boolean): RouteDecision
  * model output can't be parsed — caller falls back to heuristic.
  */
 export async function modelRoute(
-  lm: CactusLM,
+  lm: RouterLM,
   prompt: string,
 ): Promise<RouteDecision | null> {
   try {
@@ -101,9 +109,10 @@ export async function modelRoute(
 export async function route(
   prompt: string,
   hasImage: boolean,
-  lm: CactusLM | null,
+  lm: RouterLM | null,
+  cloudEnabled: boolean,
 ): Promise<RouteDecision> {
-  const fast = heuristicRoute(prompt, hasImage);
+  const fast = heuristicRoute(prompt, hasImage, cloudEnabled);
   if (fast) return fast;
 
   if (!lm) {
@@ -121,7 +130,7 @@ export async function route(
 
   // Re-escalate `local_answer` to cloud if cloud is configured and heuristic
   // signals complexity — the small router model tends to under-escalate.
-  if (decision.route === 'local_answer' && isCloudConfigured()) {
+  if (decision.route === 'local_answer' && cloudEnabled) {
     if (prompt.length >= LONG_PROMPT_CHARS || CODE_HINT.test(prompt) || PLAN_HINT.test(prompt)) {
       return { route: 'cloud_answer', confidence: decision.confidence, reason: 're-escalated by complexity' };
     }
